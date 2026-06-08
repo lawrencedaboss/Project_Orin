@@ -1,0 +1,33 @@
+{
+  "_comment": "Item definitions. Key = item_id used everywhere else. Add as many fields as you need.",
+
+  "health_pack": {
+    "name": "Health Pack",
+    "description": "Restores 30 hunger.",
+    "effect": { "hunger": 30 }
+  },
+
+  "rad_pill": {
+    "name": "Rad-Away Pill",
+    "description": "Reduces radiation by 25.",
+    "effect": { "radiation": -25 }
+  },
+
+  "key": {
+    "name": "Key",
+    "description": "Opens a locked box.",
+    "effect": {}
+  },
+
+  "map_fragment": {
+    "name": "Map Fragment",
+    "description": "Reveals nearby zones on the overworld map.",
+    "effect": { "reveal_radius": 2 }
+  },
+
+  "food_can": {
+    "name": "Food Can",
+    "description": "Restores 15 hunger.",
+    "effect": { "hunger": 15 }
+  }
+}

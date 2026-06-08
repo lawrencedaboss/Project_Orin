@@ -1,0 +1,17 @@
+{
+  "_comment": "Dictionary of item placements. Key format: 'zone_x,zone_y'. x/y are pixel coordinates within that loading zone.",
+
+  "0,0": [
+    { "item_id": "health_pack", "x": 200, "y": 200 },
+    { "item_id": "key",         "x": 450, "y": 350 }
+  ],
+
+  "1,0": [
+    { "item_id": "food_can",    "x": 300, "y": 150 }
+  ],
+
+  "0,1": [
+    { "item_id": "rad_pill",    "x": 120, "y": 400 },
+    { "item_id": "map_fragment","x": 600, "y": 200 }
+  ]
+}

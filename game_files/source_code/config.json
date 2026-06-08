@@ -1,0 +1,38 @@
+{
+  "game": {
+    "screen_width": 1000,
+    "screen_height": 800,
+    "zone_count_x": 20,
+    "zone_count_y": 16,
+    "fps": 100,
+    "animal_count": 12
+  },
+  "keybinds": {
+    "pause": "p",
+    "hide": "h",
+    "action": "e",
+    "inventory": "i",
+    "exit": "escape",
+    "move_up": "up",
+    "move_down": "down",
+    "move_left": "left",
+    "move_right": "right"
+  },
+  "balance": {
+    "monster_speed": 8000,
+    "monster_wander_speed": 500,
+    "animal_speed": 80,
+    "animal_wander_interval_min": 2,
+    "animal_wander_interval_max": 5,
+    "player_base_speed": 500,
+    "hunger_rate": 1.5,
+    "hunger_speed_multiplier": 7.5,
+    "radiation_rate": 25,
+    "radiation_max": 100
+  },
+  "player": {
+    "start_x": 250,
+    "start_y": 250,
+    "hunger_start": 100
+  }
+}
