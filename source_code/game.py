@@ -13,7 +13,8 @@ from sounds import SFX, MUSIC, init_audio, SND_COLLECT, SND_HIDE, SND_UNHIDE, SN
 from map_data import (get_zone_type, get_items_in_zone, get_item_def,
                       get_zone_grid, TILE_EMPTY,TILE_WALL, TILE_OBJECT, UNIT_W, UNIT_H,
                       ZONE_TILE_WIDTH, ZONE_TILE_HEIGHT)
-
+from bullets import BulletsManager
+from bullets import Bullet
 
 
 
@@ -350,7 +351,9 @@ class Game:
        self.pause_screen = PauseScreen()
        self.inventory_screen = InventoryScreen()
        self.game_over_screen = GameOverScreen()
-
+       self.bullets = BulletsManager()
+       self.last_mouse_pressed = False
+       self.last_shoot_pressed = False
 
 
 
@@ -404,6 +407,15 @@ class Game:
            buf.append(int(32767 * val))
        return pygame.mixer.Sound(buffer=buf)
 
+   def _try_fire(self):
+       if pygame.mouse.get_pressed()[0] and not self.player.hiding:
+           mx, my = pygame.mouse.get_pos()
+           mx -= MAP_LEFT
+           my -= MAP_TOP
+           px, py = self.player.rect.center
+           dx = mx - px
+           dy = my - py
+           self.bullets.fire(px, py, dx, dy, self.player.loadingzonex, self.player.loadingzoney)
 
    def _ai_loop(self):
        """Background thread: updates monster AI and all animals."""
@@ -504,6 +516,8 @@ class Game:
        for event in pygame.event.get():
            if event.type == pygame.QUIT:
                self.running = False
+           if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+               self._try_fire()
            if event.type == pygame.KEYDOWN:
                if event.key == KEYBINDS['pause']:
                    resume = self.pause_screen.run(self.screen, self.clock)
@@ -603,7 +617,24 @@ class Game:
            else:
                _zone_dist  = None
                _pixel_dist = None
-
+       self.bullets.update(dt)
+       for bullet in list(self.bullets.bullets):
+                         for animal in list(self.animals):
+                            if self._in_player_zone(animal) and bullet.rect.colliderect(animal.rect):
+                               self.bullets.bullets.remove(bullet)
+                               self.animals.remove(animal)
+                               break
+       if self._in_player_zone(self.monster):
+                      for bullet in list(self.bullets.bullets):
+                          if bullet.rect.colliderect(self.monster.rect) and bullet.collide:
+                              bullet.vx = -2*bullet.vx
+                              bullet.vy = -2*bullet.vy
+                              bullet.collide=False
+                      for bullet in list(self.bullets.bullets):
+                          if self._in_player_zone(bullet):
+                              if bullet.life<1.85 and bullet.rect.colliderect(self.player.rect):
+                                  self.player.alive=False
+                                  break
        # Proximity beep / flatline drone — runs on main thread, outside lock
        _MAX_BEEP_PX = MAP_WIDTH * 9  # silence beyond ~9 zones' worth of pixels
 
@@ -674,8 +705,8 @@ class Game:
            if self._in_player_zone(box):
                box.draw(self.game_surface)
 
-
-
+       # Draw bullets on the game surface so they appear above the map and under the HUD.
+       self.bullets.draw(self.game_surface)
 
        # Only draw monster when active and in the player's zone
        if self.monster.active and self._in_player_zone(self.monster):
