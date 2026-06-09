@@ -1,7 +1,7 @@
 {
   "game": {
-    "screen_width": 1000,
-    "screen_height": 800,
+    "screen_width": 900,
+    "screen_height": 700,
     "zone_count_x": 20,
     "zone_count_y": 16,
     "fps": 100,

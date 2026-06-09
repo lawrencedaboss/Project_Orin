@@ -336,12 +336,19 @@ class Game:
                                MAP_WIDTH, MAP_HEIGHT, ZONE_COUNT_X, ZONE_COUNT_Y)
                        for _ in range(ANIMAL_COUNT)]
        self.game_surface = pygame.Surface((MAP_WIDTH, MAP_HEIGHT))
-       self.boxes = [
-           Box(120, 120, 0, 0),
-           Box(520, 90, 1, 0),
-           Box(240, 420, 0, 1),
-           Box(560, 360, 1, 1),
-       ]
+       self.boxes = []
+       for zone_y in range(ZONE_COUNT_Y):
+           for zone_x in range(ZONE_COUNT_X):
+               for item in get_items_in_zone(zone_x, zone_y):
+                   self.boxes.append(Box(item['x'], item['y'], zone_x, zone_y))
+
+       if not self.boxes:
+           self.boxes = [
+               Box(120, 120, 0, 0),
+               Box(520, 90, 1, 0),
+               Box(240, 420, 0, 1),
+               Box(560, 360, 1, 1),
+           ]
        self.font = pygame.font.SysFont('Arial', 20)
 
 
