@@ -467,10 +467,16 @@ class Game:
        """Return a list of pygame.Rects for every TILE_WALL in the zone."""
        rects = []
        grid = get_zone_grid(zone_x, zone_y)
+       if not grid:
+           return rects
+
+       tile_w = MAP_WIDTH // max(1, len(grid[0]))
+       tile_h = MAP_HEIGHT // max(1, len(grid))
+
        for ty, row in enumerate(grid):
            for tx, tile in enumerate(row):
                if tile == TILE_WALL:
-                   rects.append(pygame.Rect(tx * UNIT_W, ty * UNIT_H, UNIT_W, UNIT_H))
+                   rects.append(pygame.Rect(tx * tile_w, ty * tile_h, tile_w, tile_h))
        return rects
 
 
@@ -499,22 +505,34 @@ class Game:
    def _render_tiles(self, surface):
        """Draw the tile map for the player's current loading zone."""
        grid = get_zone_grid(self.player.loadingzonex, self.player.loadingzoney)
+       if not grid:
+           return
+
+       tile_w = MAP_WIDTH // max(1, len(grid[0]))
+       tile_h = MAP_HEIGHT // max(1, len(grid))
+       inner_pad_x = max(1, tile_w // 6)
+       inner_pad_y = max(1, tile_h // 6)
+
        for ty, row in enumerate(grid):
            for tx, tile in enumerate(row):
                if tile == TILE_EMPTY:
                    continue
-               rx = tx * UNIT_W
-               ry = ty * UNIT_H
+               rx = tx * tile_w
+               ry = ty * tile_h
                if tile == TILE_WALL:
                    pygame.draw.rect(surface, (55, 55, 65),
-                                    (rx, ry, UNIT_W, UNIT_H))
+                                    (rx, ry, tile_w, tile_h))
                    pygame.draw.rect(surface, (80, 80, 95),
-                                    (rx, ry, UNIT_W, UNIT_H), 2)
+                                    (rx, ry, tile_w, tile_h), 2)
                elif tile == TILE_OBJECT:
                    pygame.draw.rect(surface, (100, 70, 30),
-                                    (rx + 10, ry + 10, UNIT_W - 20, UNIT_H - 20))
+                                    (rx + inner_pad_x, ry + inner_pad_y,
+                                     tile_w - inner_pad_x * 2,
+                                     tile_h - inner_pad_y * 2))
                    pygame.draw.rect(surface, (150, 110, 50),
-                                    (rx + 10, ry + 10, UNIT_W - 20, UNIT_H - 20), 2)
+                                    (rx + inner_pad_x, ry + inner_pad_y,
+                                     tile_w - inner_pad_x * 2,
+                                     tile_h - inner_pad_y * 2), 2)
 
 
 

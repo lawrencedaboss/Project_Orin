@@ -45,12 +45,14 @@ ITEM_POSITIONS_JSON = os.path.join(_DATA_DIR, "item_positions.json")
 
 
 # ---------------------------------------------------------------------------
-# Tile grid dimensions — 21 units wide, 17 units tall per loading zone
+# Tile grid dimensions — 21 units wide, 17 units tall per loading zone.
+# The map surface uses the full available map area, so each unit fills
+# the allocated space instead of leaving a large unused border.
 # ---------------------------------------------------------------------------
 ZONE_TILE_WIDTH  = 21
 ZONE_TILE_HEIGHT = 17
-UNIT_W = MAP_WIDTH  // (ZONE_TILE_WIDTH + 1)   # pixels per unit
-UNIT_H = MAP_HEIGHT // (ZONE_TILE_HEIGHT + 1)    # pixels per unit
+UNIT_W = MAP_WIDTH  // ZONE_TILE_WIDTH   # pixels per unit
+UNIT_H = MAP_HEIGHT // ZONE_TILE_HEIGHT  # pixels per unit
 
 
 # ---------------------------------------------------------------------------
@@ -141,7 +143,7 @@ def get_zone_type(zone_x: int, zone_y: int) -> int:
 
 
 def get_zone_grid(zone_x: int, zone_y: int):
-    """Return the full 6-row × 8-col tile grid for a loading zone."""
+    """Return the full 17-row × 21-col tile grid for a loading zone."""
     return ZONE_TILES[zone_y][zone_x]
 
 
