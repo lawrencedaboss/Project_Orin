@@ -20,7 +20,7 @@
     "shoot":"q"
   },
   "balance": {
-    "monster_speed": 8000,
+    "monster_speed": 800,
     "monster_wander_speed": 500,
     "animal_speed": 80,
     "animal_wander_interval_min": 2,
