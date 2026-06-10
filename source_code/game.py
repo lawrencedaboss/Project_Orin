@@ -1,3 +1,4 @@
+import os
 import pygame
 import threading
 import time as _time
@@ -325,6 +326,15 @@ class Game:
        pygame.mixer.pre_init(44100, -16, 1, 512)
        pygame.init()
        init_audio()   # load all .wav/.ogg files from assets/sounds/ — must be after pygame.init()
+       base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+       self.asset_dirs = {
+           "sprites": os.path.join(base_dir, "assets", "sprites"),
+           "music": os.path.join(base_dir, "assets", "music"),
+       }
+       self.asset_ready = {
+           "sprites": os.path.isdir(self.asset_dirs["sprites"]),
+           "music": os.path.isdir(self.asset_dirs["music"]),
+       }
        self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
        pygame.display.set_caption("Project Orin")
        self.clock = pygame.time.Clock()
@@ -397,6 +407,22 @@ class Game:
            val = int(32767 * volume * fade * math.sin(2 * math.pi * frequency * t))
            buf.append(val)
        return pygame.mixer.Sound(buffer=buf)
+
+   def _play_beep(self, volume: float = 1.0):
+       """Play the proximity beep safely, preferring the asset file when available."""
+       self._beep_sound.stop()
+       vol = max(0.05, min(1.0, volume))
+       if SND_BEEP in SFX.loaded():
+           SFX.play(SND_BEEP, vol=vol)
+       else:
+           self._beep_sound.set_volume(vol)
+           self._beep_sound.play()
+
+   def _stop_alert_audio(self):
+       """Stop any active beep/drone sounds and reset the alert state."""
+       self._beep_sound.stop()
+       self._drone_sound.stop()
+       self._droning = False
 
    @staticmethod
    def _create_drone(frequency=880, sample_rate=44100, volume=0.35):
@@ -677,46 +703,48 @@ class Game:
                        break
        for bullet in list(self.bullets.bullets):
            bullet.check_wall_collision(dt)      
-       # Proximity beep / flatline drone — runs on main thread, outside lock
-       _MAX_BEEP_PX = MAP_WIDTH * 9  # silence beyond ~9 zones' worth of pixels
+       # Proximity beep / flatline drone — use real pixel distance, not zone counts.
+       _MAX_BEEP_PX = max(1, MAP_WIDTH * 6)
+       _DRONE_NEAR_PX = max(120, MAP_WIDTH // 6)
 
-       if _zone_dist is not None and _zone_dist == 0:
-           # Same zone — flatline into continuous drone
+       if _pixel_dist is not None and _pixel_dist < _DRONE_NEAR_PX:
+           # Very close monster: switch to a continuous drone.
            if not self._droning:
-               self._beep_sound.stop()
-               self._drone_sound.play(-1)   # loop forever
+               self._stop_alert_audio()
+               self._drone_sound.play(-1)
                self._droning = True
            self._beep_interval = None
-           self._beep_timer    = 0.0
+           self._beep_timer = 0.0
+           danger_t = min(1.0, _pixel_dist / _DRONE_NEAR_PX)
+           self._drone_sound.set_volume(0.25 + 0.75 * (1.0 - danger_t))
 
        elif _pixel_dist is not None and _pixel_dist < _MAX_BEEP_PX:
-           # Use raw pixel distance so beeps respond to position within zones
+           # Farther away: fall back to spaced beeps that scale with actual distance.
            if self._droning:
+               self._stop_alert_audio()
                self._drone_sound.stop()
                self._droning = False
-           t = _pixel_dist / _MAX_BEEP_PX          # 0 = right next door, 1 = edge of range
+           t = min(1.0, _pixel_dist / _MAX_BEEP_PX)
            self._beep_interval = 0.12 + t * (2.5 - 0.12)
+           self._beep_timer = self._beep_interval
 
        else:
-           # Far away or inactive — silence everything
-           if self._droning:
-               self._drone_sound.stop()
-               self._droning = False
+           # Far away or inactive — silence everything.
+           self._stop_alert_audio()
            self._beep_interval = None
        if not self.player.alive:
-           # Far away or inactive — silence everything
-           if self._droning:
-               self._drone_sound.stop()
-               self._droning = False
+           # Far away or inactive — silence everything.
+           self._stop_alert_audio()
            self._beep_interval = None
 
        if self._beep_interval is not None:
            self._beep_timer -= dt
            if self._beep_timer <= 0:
-               if SND_BEEP in SFX.loaded():
-                   SFX.play(SND_BEEP)
-               else:
-                   self._beep_sound.play()
+               distance_ratio = 0.0
+               if _pixel_dist is not None:
+                   distance_ratio = min(1.0, _pixel_dist / _MAX_BEEP_PX)
+               beep_volume = 0.25 + 0.75 * distance_ratio
+               self._play_beep(beep_volume)
                self._beep_timer = self._beep_interval
        elif not self._droning:
            self._beep_timer = 0.0
