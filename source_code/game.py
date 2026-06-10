@@ -772,11 +772,6 @@ class Game:
        self.screen.blit(self.game_surface, (MAP_LEFT, MAP_TOP))
        pygame.draw.rect(self.screen, (100, 100, 120), (MAP_LEFT - 2, MAP_TOP - 2, MAP_WIDTH + 4, MAP_HEIGHT + 4), 2)
 
-       status_text = f"Objects found: {self.player.collected_objects}/{len(self.boxes)}"
-       status_surface = self.font.render(status_text, True, (255, 255, 255))
-       self.screen.blit(status_surface, (MAP_LEFT + 20, 20))
-
-
        # Build hint text using the actual bound keys
        k_hide = pygame.key.name(KEYBINDS['hide']).upper()
        k_action = pygame.key.name(KEYBINDS['action']).upper()
