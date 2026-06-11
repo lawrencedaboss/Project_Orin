@@ -1,4 +1,3 @@
-import os
 import pygame
 import threading
 import time as _time
@@ -9,14 +8,16 @@ from monster import Monster
 from animals import Animal
 from objects import Box
 from title_screen import TitleScreen
-from config import SCREEN_WIDTH, SCREEN_HEIGHT, MAP_WIDTH, MAP_HEIGHT, MAP_LEFT, MAP_TOP, ZONE_COUNT_X, ZONE_COUNT_Y, FPS, ANIMAL_COUNT, RADIATION_RATE, KEYBINDS
+from config import (SCREEN_WIDTH, SCREEN_HEIGHT, MAP_WIDTH, MAP_HEIGHT,
+                    MAP_LEFT, MAP_TOP, ZONE_COUNT_X, ZONE_COUNT_Y, FPS,
+                    ANIMAL_COUNT, RADIATION_RATE, FOOD_HUNGER_RESTORE, KEYBINDS)
 from sounds import SFX, MUSIC, init_audio, SND_COLLECT, SND_HIDE, SND_UNHIDE, SND_BEEP, SND_DEATH, MUS_MENU, MUS_AMBIENT, MUS_TENSE
 from map_data import (get_zone_type, get_items_in_zone, get_item_def,
                       get_zone_grid, TILE_EMPTY,TILE_WALL, TILE_OBJECT, UNIT_W, UNIT_H,
                       ZONE_TILE_WIDTH, ZONE_TILE_HEIGHT)
 from bullets import BulletsManager
 from bullets import Bullet
-
+from food import Food
 
 
 
@@ -326,15 +327,6 @@ class Game:
        pygame.mixer.pre_init(44100, -16, 1, 512)
        pygame.init()
        init_audio()   # load all .wav/.ogg files from assets/sounds/ — must be after pygame.init()
-       base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-       self.asset_dirs = {
-           "sprites": os.path.join(base_dir, "assets", "sprites"),
-           "music": os.path.join(base_dir, "assets", "music"),
-       }
-       self.asset_ready = {
-           "sprites": os.path.isdir(self.asset_dirs["sprites"]),
-           "music": os.path.isdir(self.asset_dirs["music"]),
-       }
        self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
        pygame.display.set_caption("Project Orin")
        self.clock = pygame.time.Clock()
@@ -346,6 +338,7 @@ class Game:
                                MAP_WIDTH, MAP_HEIGHT, ZONE_COUNT_X, ZONE_COUNT_Y)
                        for _ in range(ANIMAL_COUNT)]
        self.game_surface = pygame.Surface((MAP_WIDTH, MAP_HEIGHT))
+       self.food = []
        self.boxes = []
        for zone_y in range(ZONE_COUNT_Y):
            for zone_x in range(ZONE_COUNT_X):
@@ -407,22 +400,6 @@ class Game:
            val = int(32767 * volume * fade * math.sin(2 * math.pi * frequency * t))
            buf.append(val)
        return pygame.mixer.Sound(buffer=buf)
-
-   def _play_beep(self, volume: float = 1.0):
-       """Play the proximity beep safely, preferring the asset file when available."""
-       self._beep_sound.stop()
-       vol = max(0.05, min(1.0, volume))
-       if SND_BEEP in SFX.loaded():
-           SFX.play(SND_BEEP, vol=vol)
-       else:
-           self._beep_sound.set_volume(vol)
-           self._beep_sound.play()
-
-   def _stop_alert_audio(self):
-       """Stop any active beep/drone sounds and reset the alert state."""
-       self._beep_sound.stop()
-       self._drone_sound.stop()
-       self._droning = False
 
    @staticmethod
    def _create_drone(frequency=880, sample_rate=44100, volume=0.35):
@@ -582,7 +559,7 @@ class Game:
                    if self.player.hiding != was_hiding:
                        SFX.play(SND_HIDE if self.player.hiding else SND_UNHIDE)
                if event.key == KEYBINDS['action']:
-                   self.try_collect_object()
+                   self.try_use_action()
                if event.key == KEYBINDS['inventory']:
                    self.inventory_screen.run(self.screen, self.clock, self.player, self.boxes)
 
@@ -596,7 +573,36 @@ class Game:
                if dist_x < 60 and dist_y < 60:
                    return True
        return False
+   def is_in_range_of_food(self):
+       """Check if player is in range of any food item."""
+       for food_item in self.food:
+           if self._in_player_zone(food_item):
+               dist_x = abs(self.player.x - food_item.x)
+               dist_y = abs(self.player.y - food_item.y)
+               if dist_x < 60 and dist_y < 60:
+                   return True
+       return False
 
+   def try_eat_food(self):
+       """Eat the closest nearby food item if the player is in range."""
+       nearest_food = None
+       nearest_distance = None
+       for food_item in self.food:
+           if not self._in_player_zone(food_item):
+               continue
+           dist_x = abs(self.player.x - food_item.x)
+           dist_y = abs(self.player.y - food_item.y)
+           if dist_x < 60 and dist_y < 60:
+               distance = math.hypot(dist_x, dist_y)
+               if nearest_food is None or distance < nearest_distance:
+                   nearest_food = food_item
+                   nearest_distance = distance
+       if nearest_food is not None:
+           self.player.eat(FOOD_HUNGER_RESTORE)
+           self.food.remove(nearest_food)
+           SFX.play(SND_COLLECT)
+           return True
+       return False
 
    def try_collect_object(self):
        """Try to collect an object from a nearby box."""
@@ -608,7 +614,48 @@ class Game:
                if dist_x < 60 and dist_y < 60:
                    box.collect(self.player)
                    SFX.play(SND_COLLECT)
-                   return
+                   return True
+       return False
+
+   def try_use_action(self):
+       """Use the action key for eating food or collecting nearby objects."""
+       food_available = self.is_in_range_of_food()
+       box_available = self.is_in_range_of_box()
+       if food_available and box_available:
+           # Prefer the nearest interactable item when both are available.
+           nearest_food = None
+           nearest_box = None
+           nearest_food_dist = None
+           nearest_box_dist = None
+           for food_item in self.food:
+               if not self._in_player_zone(food_item):
+                   continue
+               dist = math.hypot(self.player.x - food_item.x, self.player.y - food_item.y)
+               if nearest_food is None or dist < nearest_food_dist:
+                   nearest_food = food_item
+                   nearest_food_dist = dist
+           for box in self.boxes:
+               if not self._in_player_zone(box) or box.collected:
+                   continue
+               dist = math.hypot(self.player.x - box.x, self.player.y - box.y)
+               if dist < 60 and (nearest_box is None or dist < nearest_box_dist):
+                   nearest_box = box
+                   nearest_box_dist = dist
+           if nearest_food is not None and (nearest_box is None or nearest_food_dist <= nearest_box_dist):
+               self.player.eat(FOOD_HUNGER_RESTORE)
+               self.food.remove(nearest_food)
+               SFX.play(SND_COLLECT)
+               return True
+           if nearest_box is not None:
+               nearest_box.collect(self.player)
+               SFX.play(SND_COLLECT)
+               return True
+           return False
+       if food_available:
+           return self.try_eat_food()
+       if box_available:
+           return self.try_collect_object()
+       return False
 
 
 
@@ -686,8 +733,13 @@ class Game:
            for animal in list(self.animals):
                if self._in_player_zone(animal) and bullet.rect.colliderect(animal.rect):
                    self.bullets.bullets.remove(bullet)
+                   # Spawn food at animal's location
+                   self.food.append(Food(animal.x, animal.y, 8,
+                                         animal.loading_zone_x,
+                                         animal.loading_zone_y))
                    self.animals.remove(animal)
                    break
+                   
 
        # Bullet-monster collisions and player hit checks
        if self._in_player_zone(self.monster):
@@ -703,48 +755,46 @@ class Game:
                        break
        for bullet in list(self.bullets.bullets):
            bullet.check_wall_collision(dt)      
-       # Proximity beep / flatline drone — use real pixel distance, not zone counts.
-       _MAX_BEEP_PX = max(1, MAP_WIDTH * 6)
-       _DRONE_NEAR_PX = max(120, MAP_WIDTH // 6)
+       # Proximity beep / flatline drone — runs on main thread, outside lock
+       _MAX_BEEP_PX = MAP_WIDTH * 9  # silence beyond ~9 zones' worth of pixels
 
-       if _pixel_dist is not None and _pixel_dist < _DRONE_NEAR_PX:
-           # Very close monster: switch to a continuous drone.
+       if _zone_dist is not None and _zone_dist == 0:
+           # Same zone — flatline into continuous drone
            if not self._droning:
-               self._stop_alert_audio()
-               self._drone_sound.play(-1)
+               self._beep_sound.stop()
+               self._drone_sound.play(-1)   # loop forever
                self._droning = True
            self._beep_interval = None
-           self._beep_timer = 0.0
-           danger_t = min(1.0, _pixel_dist / _DRONE_NEAR_PX)
-           self._drone_sound.set_volume(0.25 + 0.75 * (1.0 - danger_t))
+           self._beep_timer    = 0.0
 
        elif _pixel_dist is not None and _pixel_dist < _MAX_BEEP_PX:
-           # Farther away: fall back to spaced beeps that scale with actual distance.
+           # Use raw pixel distance so beeps respond to position within zones
            if self._droning:
-               self._stop_alert_audio()
                self._drone_sound.stop()
                self._droning = False
-           t = min(1.0, _pixel_dist / _MAX_BEEP_PX)
+           t = _pixel_dist / _MAX_BEEP_PX          # 0 = right next door, 1 = edge of range
            self._beep_interval = 0.12 + t * (2.5 - 0.12)
-           self._beep_timer = self._beep_interval
 
        else:
-           # Far away or inactive — silence everything.
-           self._stop_alert_audio()
+           # Far away or inactive — silence everything
+           if self._droning:
+               self._drone_sound.stop()
+               self._droning = False
            self._beep_interval = None
        if not self.player.alive:
-           # Far away or inactive — silence everything.
-           self._stop_alert_audio()
+           # Far away or inactive — silence everything
+           if self._droning:
+               self._drone_sound.stop()
+               self._droning = False
            self._beep_interval = None
 
        if self._beep_interval is not None:
            self._beep_timer -= dt
            if self._beep_timer <= 0:
-               distance_ratio = 0.0
-               if _pixel_dist is not None:
-                   distance_ratio = min(1.0, _pixel_dist / _MAX_BEEP_PX)
-               beep_volume = 0.25 + 0.75 * distance_ratio
-               self._play_beep(beep_volume)
+               if SND_BEEP in SFX.loaded():
+                   SFX.play(SND_BEEP)
+               else:
+                   self._beep_sound.play()
                self._beep_timer = self._beep_interval
        elif not self._droning:
            self._beep_timer = 0.0
@@ -781,6 +831,11 @@ class Game:
            if self._in_player_zone(box):
                box.draw(self.game_surface)
 
+       # Draw food items in the player's zone
+       for food_item in self.food:
+           if self._in_player_zone(food_item):
+               food_item.draw(self.game_surface)
+
        # Draw bullets on the game surface so they appear above the map and under the HUD.
        self.bullets.draw(self.game_surface)
 
@@ -800,6 +855,11 @@ class Game:
        self.screen.blit(self.game_surface, (MAP_LEFT, MAP_TOP))
        pygame.draw.rect(self.screen, (100, 100, 120), (MAP_LEFT - 2, MAP_TOP - 2, MAP_WIDTH + 4, MAP_HEIGHT + 4), 2)
 
+       status_text = f"Objects found: {self.player.collected_objects}/{len(self.boxes)}"
+       status_surface = self.font.render(status_text, True, (255, 255, 255))
+       self.screen.blit(status_surface, (MAP_LEFT + 20, 20))
+
+
        # Build hint text using the actual bound keys
        k_hide = pygame.key.name(KEYBINDS['hide']).upper()
        k_action = pygame.key.name(KEYBINDS['action']).upper()
@@ -813,8 +873,14 @@ class Game:
            else:
                hint_text = f"{k_hide}: hide  |  {k_inv}: inventory"
        else:
-           if self.is_in_range_of_box():
+           food_nearby = self.is_in_range_of_food()
+           box_nearby = self.is_in_range_of_box()
+           if box_nearby and food_nearby:
+               hint_text = f"{k_action}: take item / eat food  |  {k_inv}: inventory"
+           elif box_nearby:
                hint_text = f"{k_action}: take item  |  {k_inv}: inventory"
+           elif food_nearby:
+               hint_text = f"{k_action}: eat food  |  {k_inv}: inventory"
            else:
                hint_text = f"{k_inv}: inventory"
 
