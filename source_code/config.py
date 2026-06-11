@@ -4,10 +4,13 @@ Edit config.json to customize settings and controls.
 """
 
 import json
+import os
 import pygame
 
 # Load configuration from JSON
-with open('/Users/lawrence chen/Desktop/game_files/source_code/config.json', 'r') as f:
+CONFIG_DIR = os.path.dirname(__file__)
+CONFIG_PATH = os.path.join(CONFIG_DIR, 'config.json')
+with open(CONFIG_PATH, 'r') as f:
     _config = json.load(f)
 
 # Game settings
@@ -55,6 +58,7 @@ HUNGER_RATE = _config['balance']['hunger_rate']
 HUNGER_SPEED_MULTIPLIER = _config['balance']['hunger_speed_multiplier']
 RADIATION_RATE = _config['balance']['radiation_rate']
 RADIATION_MAX = _config['balance']['radiation_max']
+FOOD_HUNGER_RESTORE = _config['balance'].get('food_hunger_restore', 20)
 
 # Starting values
 PLAYER_START_X = _config['player']['start_x']
