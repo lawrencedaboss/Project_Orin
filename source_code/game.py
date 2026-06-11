@@ -812,10 +812,10 @@ class Game:
        if self._beep_interval is not None:
            self._beep_timer -= dt
            if self._beep_timer <= 0:
-               if SND_BEEP in SFX.loaded():
-                   SFX.play(SND_BEEP)
-               else:
+               if SND_BEEP not in SFX.loaded():
                    self._beep_sound.play()
+               else:
+                   SFX.play(SND_BEEP)
                self._beep_timer = self._beep_interval
        elif not self._droning:
            self._beep_timer = 0.0
