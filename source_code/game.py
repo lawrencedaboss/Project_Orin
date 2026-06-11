@@ -573,23 +573,26 @@ class Game:
                if dist_x < 60 and dist_y < 60:
                    return True
        return False
+
+   def food_items_in_player_zone(self):
+       """Return food items that are in the same loading zone as the player."""
+       return [food_item for food_item in self.food
+               if self._in_player_zone(food_item)]
+
    def is_in_range_of_food(self):
-       """Check if player is in range of any food item."""
-       for food_item in self.food:
-           if self._in_player_zone(food_item):
-               dist_x = abs(self.player.x - food_item.x)
-               dist_y = abs(self.player.y - food_item.y)
-               if dist_x < 60 and dist_y < 60:
-                   return True
+       """Check if player is in range of any food item in the same zone."""
+       for food_item in self.food_items_in_player_zone():
+           dist_x = abs(self.player.x - food_item.x)
+           dist_y = abs(self.player.y - food_item.y)
+           if dist_x < 60 and dist_y < 60:
+               return True
        return False
 
    def try_eat_food(self):
        """Eat the closest nearby food item if the player is in range."""
        nearest_food = None
        nearest_distance = None
-       for food_item in self.food:
-           if not self._in_player_zone(food_item):
-               continue
+       for food_item in self.food_items_in_player_zone():
            dist_x = abs(self.player.x - food_item.x)
            dist_y = abs(self.player.y - food_item.y)
            if dist_x < 60 and dist_y < 60:
@@ -627,9 +630,7 @@ class Game:
            nearest_box = None
            nearest_food_dist = None
            nearest_box_dist = None
-           for food_item in self.food:
-               if not self._in_player_zone(food_item):
-                   continue
+           for food_item in self.food_items_in_player_zone():
                dist = math.hypot(self.player.x - food_item.x, self.player.y - food_item.y)
                if nearest_food is None or dist < nearest_food_dist:
                    nearest_food = food_item
