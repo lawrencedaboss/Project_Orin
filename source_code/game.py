@@ -343,7 +343,19 @@ class Game:
        for zone_y in range(ZONE_COUNT_Y):
            for zone_x in range(ZONE_COUNT_X):
                for item in get_items_in_zone(zone_x, zone_y):
-                   self.boxes.append(Box(item['x'], item['y'], zone_x, zone_y))
+                   x = item.get('x', 0)
+                   y = item.get('y', 0)
+
+                   # Item positions are stored in map units, then converted to
+                   # pixel coordinates for the runtime box objects.
+                   if x > ZONE_TILE_WIDTH or y > ZONE_TILE_HEIGHT:
+                       px = x
+                       py = y
+                   else:
+                       px = x * UNIT_W
+                       py = y * UNIT_H
+
+                   self.boxes.append(Box(px, py, zone_x, zone_y))
 
        if not self.boxes:
            self.boxes = [
@@ -769,12 +781,20 @@ class Game:
            self._beep_timer    = 0.0
 
        elif _pixel_dist is not None and _pixel_dist < _MAX_BEEP_PX:
-           # Use raw pixel distance so beeps respond to position within zones
+           # Use raw pixel distance so beeps respond to position within zones,
+           # but ease the interval so the alert rate ramps up smoothly instead
+           # of snapping to the next loading-zone value.
            if self._droning:
                self._drone_sound.stop()
                self._droning = False
            t = _pixel_dist / _MAX_BEEP_PX          # 0 = right next door, 1 = edge of range
-           self._beep_interval = 0.12 + t * (2.5 - 0.12)
+           target_interval = 0.12 + t * (2.5 - 0.12)
+
+           if self._beep_interval is None:
+               self._beep_interval = target_interval
+           else:
+               smoothing = min(1.0, dt * 4.0)
+               self._beep_interval += (target_interval - self._beep_interval) * smoothing
 
        else:
            # Far away or inactive — silence everything
@@ -856,9 +876,6 @@ class Game:
        self.screen.blit(self.game_surface, (MAP_LEFT, MAP_TOP))
        pygame.draw.rect(self.screen, (100, 100, 120), (MAP_LEFT - 2, MAP_TOP - 2, MAP_WIDTH + 4, MAP_HEIGHT + 4), 2)
 
-       status_text = f"Objects found: {self.player.collected_objects}/{len(self.boxes)}"
-       status_surface = self.font.render(status_text, True, (255, 255, 255))
-       self.screen.blit(status_surface, (MAP_LEFT + 20, 20))
 
 
        # Build hint text using the actual bound keys
