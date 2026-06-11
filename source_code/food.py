@@ -1,6 +1,6 @@
 import pygame
 class Food:
-    def __init__(self, x, y, size, loading_zone_x=0, loading_zone_y=0):
+    def __init__(self, x, y, size, loading_zone_x, loading_zone_y):
         self.x = x
         self.y = y
         self.size = size
