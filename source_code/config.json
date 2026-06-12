@@ -5,7 +5,7 @@
     "zone_count_x": 20,
     "zone_count_y": 16,
     "fps": 100,
-    "animal_count": 12
+    "animal_count": 40
   },
   "keybinds": {
     "pause": "p",

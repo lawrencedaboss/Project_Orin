@@ -131,7 +131,7 @@ class Player:
        self.rect.y = int(self.y)
 
 
-   def draw(self, screen):
+   def draw(self, screen, dt):
        if self.alive and not self.hiding:
            pygame.draw.rect(screen, self.color, self.rect)
 
