@@ -707,7 +707,7 @@ class Game:
                    self.player.radiation += dt * RADIATION_RATE * 0.2
                else:
                    self.player.radiation += dt * RADIATION_RATE
-
+           else: self.player.radiation = max(0, self.player.radiation - dt )
            # Collision colour feedback.
            if (self.monster.active and self._in_player_zone(self.monster)
                    and self.player.rect.colliderect(self.monster.rect)
@@ -770,8 +770,9 @@ class Game:
            bullet.check_wall_collision(dt)      
        # Proximity beep / flatline drone — runs on main thread, outside lock
        _MAX_BEEP_PX = MAP_WIDTH * 9  # silence beyond ~9 zones' worth of pixels
-
-       if _zone_dist is not None and _zone_dist == 0:
+       if not self.player.alive:
+           self._beep_sound.stop()
+       elif _zone_dist is not None and _zone_dist == 0:
            # Same zone — flatline into continuous drone
            if not self._droning:
                self._beep_sound.stop()
