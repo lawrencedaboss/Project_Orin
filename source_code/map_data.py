@@ -121,6 +121,12 @@ def _load_items():
 
 
 def _load_item_positions():
+    if os.path.isfile(MAP_JSON):
+        with open(MAP_JSON, "r") as f:
+            data = json.load(f)
+        if isinstance(data.get("item_positions"), dict):
+            return data["item_positions"]
+
     if not os.path.isfile(ITEM_POSITIONS_JSON):
         return {}
     with open(ITEM_POSITIONS_JSON, "r") as f:

@@ -17,7 +17,7 @@ assert KEYBINDS['action'] == pygame.K_x, "Keybind modification failed"
 KEYBINDS['action'] = original
 print("✓ Keybind modification works")
 
-from game import Game
+from source_code.main import Game
 print("✓ Game imports successfully")
 
 from player import Player

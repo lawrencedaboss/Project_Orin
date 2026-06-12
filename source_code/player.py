@@ -1,6 +1,7 @@
 import pygame
 import math
 from config import KEYBINDS, PLAYER_BASE_SPEED, HUNGER_RATE, HUNGER_SPEED_MULTIPLIER, RADIATION_MAX, PLAYER_START_X, PLAYER_START_Y, PLAYER_HUNGER_START
+from map_data import get_item_def
 
 # radiation >= this kills the player
 
@@ -30,6 +31,7 @@ class Player:
        self.alive = True
        self.hiding = False
        self.collected_objects = 0
+       self.inventory = []
        self.RADIATION_MAX = RADIATION_MAX
 
 
@@ -49,6 +51,24 @@ class Player:
    def eat(self, nutrition):
        self.hunger = min(100, self.hunger + nutrition)
 
+   def use_inventory_item(self, item_id=None):
+       if not self.inventory:
+           return False
+
+       target_id = item_id or self.inventory[0]
+       item_def = get_item_def(target_id)
+       if not item_def:
+           return False
+
+       effect = item_def.get('effect', {})
+       if 'hunger' in effect:
+           self.hunger = max(0, min(100, self.hunger + effect['hunger']))
+       if 'radiation' in effect:
+           self.radiation = max(0, self.radiation + effect['radiation'])
+
+       if target_id in self.inventory:
+           self.inventory.remove(target_id)
+       return True
 
 
    def toggle_hiding(self, boxes):

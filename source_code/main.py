@@ -222,6 +222,9 @@ class InventoryScreen:
                if event.type == pygame.KEYDOWN:
                    if event.key == pygame.K_ESCAPE or event.key == KEYBINDS['inventory']:
                        return True
+                   if event.key == pygame.K_u and player.inventory:
+                       player.use_inventory_item()
+                       continue
 
 
            overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
@@ -269,47 +272,63 @@ class InventoryScreen:
 
 
            y_offset += 15
-           
+
            # Hunger status
            hunger_bar_width = 200
            hunger_bar_height = 20
            hunger_x = panel_x + 30
            hunger_y = y_offset
-           
+
            hunger_text = self.text_font.render("Hunger:", True, (255, 200, 100))
            screen.blit(hunger_text, (hunger_x, hunger_y))
-           
+
            hunger_percentage = player.hunger / 100
            pygame.draw.rect(screen, (50, 50, 50), (hunger_x + 150, hunger_y + 2, hunger_bar_width, hunger_bar_height))
-           pygame.draw.rect(screen, (100, 200, 100), (hunger_x + 150, hunger_y + 2, hunger_bar_width * hunger_percentage, hunger_bar_height))
+           pygame.draw.rect(screen, (255, 140, 0), (hunger_x + 150, hunger_y + 2, hunger_bar_width * hunger_percentage, hunger_bar_height))
            pygame.draw.rect(screen, (200, 200, 200), (hunger_x + 150, hunger_y + 2, hunger_bar_width, hunger_bar_height), 1)
-           
+
            hunger_pct = self.small_font.render(f"{player.hunger:.0f}%", True, (255, 255, 255))
            screen.blit(hunger_pct, (hunger_x + 360, hunger_y + 2))
-           
-           y_offset += 35
 
+           y_offset += 35
 
            # Radiation status
            radiation_bar_width = 200
            radiation_bar_height = 20
            radiation_x = panel_x + 30
            radiation_y = y_offset
-           
-           radiation_text = self.text_font.render("Radiation:", True, (255, 100, 100))
+
+           radiation_text = self.text_font.render("Radiation:", True, (150, 255, 150))
            screen.blit(radiation_text, (radiation_x, radiation_y))
-           
+
            radiation_percentage = min(player.radiation / player.RADIATION_MAX, 1.0)
            pygame.draw.rect(screen, (50, 50, 50), (radiation_x + 150, radiation_y + 2, radiation_bar_width, radiation_bar_height))
-           pygame.draw.rect(screen, (200, 50, 50), (radiation_x + 150, radiation_y + 2, radiation_bar_width * radiation_percentage, radiation_bar_height))
+           pygame.draw.rect(screen, (0, 255, 75), (radiation_x + 150, radiation_y + 2, radiation_bar_width * radiation_percentage, radiation_bar_height))
            pygame.draw.rect(screen, (200, 200, 200), (radiation_x + 150, radiation_y + 2, radiation_bar_width, radiation_bar_height), 1)
-           
+
            radiation_pct = self.small_font.render(f"{player.radiation:.0f}%", True, (255, 255, 255))
            screen.blit(radiation_pct, (radiation_x + 360, radiation_y + 2))
 
+           y_offset += 55
+           inv_title = self.small_font.render("Inventory items:", True, (255, 255, 255))
+           screen.blit(inv_title, (panel_x + 30, y_offset))
+           y_offset += 28
+
+           if player.inventory:
+               for item_id in player.inventory:
+                   item_def = get_item_def(item_id)
+                   name = item_def.get('name', item_id)
+                   desc = item_def.get('description', '')
+                   screen.blit(self.small_font.render(f"• {name}", True, (255, 230, 180)), (panel_x + 50, y_offset))
+                   y_offset += 24
+                   if desc:
+                       screen.blit(self.small_font.render(f"  {desc}", True, (190, 205, 240)), (panel_x + 60, y_offset))
+                       y_offset += 22
+           else:
+               screen.blit(self.small_font.render("No consumables collected yet.", True, (200, 200, 200)), (panel_x + 50, y_offset))
 
            y_offset = panel_y + panel_height - 50
-           hint = self.small_font.render("Press ESC or I to close", True, (150, 150, 150))
+           hint = self.small_font.render("Press U to use a held item | ESC/I to close", True, (150, 150, 150))
            screen.blit(hint, (SCREEN_WIDTH // 2 - hint.get_width() // 2, y_offset))
 
 
@@ -355,7 +374,7 @@ class Game:
                        px = x * UNIT_W
                        py = y * UNIT_H
 
-                   self.boxes.append(Box(px, py, zone_x, zone_y))
+                   self.boxes.append(Box(px, py, zone_x, zone_y, item=item))
 
        if not self.boxes:
            self.boxes = [
