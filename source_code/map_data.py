@@ -15,9 +15,9 @@ Folder layout:
     ├── source_code/
     │   └── map_data.py      ← this file
     └── data/
-        ├── map.json          ← world map + per-zone tile grids
+        ├── map.json          ← world map + per-zone tile grids + item_positions + radiation_map
         ├── items.json        ← item definitions
-        └── item_positions.json ← item placements per zone
+        └── item_positions.json ← (legacy; map.json takes priority)
 
 Public API:
     get_zone_type(zx, zy)              → int
@@ -26,6 +26,7 @@ Public API:
     get_zone_grid(zx, zy)             → list[list[int]]   6 rows × 8 cols
     get_items_in_zone(zx, zy)         → list[dict]
     get_item_def(item_id)             → dict
+    get_zone_radiation(zx, zy)        → float  (0-based zone radiation level)
 """
 
 import os
@@ -39,32 +40,41 @@ from config import ZONE_COUNT_X, ZONE_COUNT_Y, MAP_WIDTH, MAP_HEIGHT
 _SOURCE_DIR = os.path.dirname(os.path.abspath(__file__))
 _DATA_DIR   = os.path.join(os.path.dirname(_SOURCE_DIR), "data")
 
-MAP_JSON            = os.path.join(_DATA_DIR, "map.json")
-ITEMS_JSON          = os.path.join(_DATA_DIR, "items.json")
-ITEM_POSITIONS_JSON = os.path.join(_DATA_DIR, "item_positions.json")
+# Try both locations (same dir as script, or ../data/)
+def _find_data_file(name):
+    candidates = [
+        os.path.join(_SOURCE_DIR, name),
+        os.path.join(_DATA_DIR, name),
+    ]
+    for path in candidates:
+        if os.path.isfile(path):
+            return path
+    return candidates[0]  # default to first even if missing
+
+MAP_JSON            = _find_data_file("map.json")
+ITEMS_JSON          = _find_data_file("items.json")
+ITEM_POSITIONS_JSON = _find_data_file("item_positions.json")
 
 
 # ---------------------------------------------------------------------------
-# Tile grid dimensions — 21 units wide, 17 units tall per loading zone.
-# The map surface uses the full available map area, so each unit fills
-# the allocated space instead of leaving a large unused border.
+# Tile grid dimensions
 # ---------------------------------------------------------------------------
 ZONE_TILE_WIDTH  = 21
 ZONE_TILE_HEIGHT = 17
-UNIT_W = MAP_WIDTH  // ZONE_TILE_WIDTH   # pixels per unit
-UNIT_H = MAP_HEIGHT // ZONE_TILE_HEIGHT  # pixels per unit
+UNIT_W = MAP_WIDTH  // ZONE_TILE_WIDTH
+UNIT_H = MAP_HEIGHT // ZONE_TILE_HEIGHT
 
 
 # ---------------------------------------------------------------------------
 # Tile ID constants
 # ---------------------------------------------------------------------------
-TILE_EMPTY  = 0   # walkable, nothing drawn
-TILE_WALL   = 1   # solid, impassable
-TILE_OBJECT = 2   # item / interactable
+TILE_EMPTY  = 0
+TILE_WALL   = 1
+TILE_OBJECT = 2
 
 
 # ---------------------------------------------------------------------------
-# Zone type ID constants  (used in world_map)
+# Zone type ID constants
 # ---------------------------------------------------------------------------
 ZONE_DEFAULT   = 0
 ZONE_FOREST    = 1
@@ -89,15 +99,22 @@ def _default_zone_tiles():
             for _ in range(ZONE_COUNT_Y)]
 
 
+def _default_radiation_map():
+    """Default radiation map — all zones have level 1 ambient radiation."""
+    return [[1] * ZONE_COUNT_X for _ in range(ZONE_COUNT_Y)]
+
+
 # ---------------------------------------------------------------------------
 # Loaders
 # ---------------------------------------------------------------------------
 def _load_map():
-    world_map  = _default_world_map()
-    zone_tiles = _default_zone_tiles()
+    world_map     = _default_world_map()
+    zone_tiles    = _default_zone_tiles()
+    radiation_map = _default_radiation_map()
+    item_positions = {}
 
     if not os.path.isfile(MAP_JSON):
-        return world_map, zone_tiles
+        return world_map, zone_tiles, radiation_map, item_positions
 
     with open(MAP_JSON, "r") as f:
         data = json.load(f)
@@ -110,7 +127,13 @@ def _load_map():
         if 0 <= zx < ZONE_COUNT_X and 0 <= zy < ZONE_COUNT_Y:
             zone_tiles[zy][zx] = grid
 
-    return world_map, zone_tiles
+    if "radiation_map" in data:
+        radiation_map = data["radiation_map"]
+
+    if isinstance(data.get("item_positions"), dict):
+        item_positions = data["item_positions"]
+
+    return world_map, zone_tiles, radiation_map, item_positions
 
 
 def _load_items():
@@ -120,13 +143,8 @@ def _load_items():
         return json.load(f)
 
 
-def _load_item_positions():
-    if os.path.isfile(MAP_JSON):
-        with open(MAP_JSON, "r") as f:
-            data = json.load(f)
-        if isinstance(data.get("item_positions"), dict):
-            return data["item_positions"]
-
+def _load_item_positions_legacy():
+    """Fallback: load from standalone item_positions.json if map.json has none."""
     if not os.path.isfile(ITEM_POSITIONS_JSON):
         return {}
     with open(ITEM_POSITIONS_JSON, "r") as f:
@@ -136,9 +154,14 @@ def _load_item_positions():
 # ---------------------------------------------------------------------------
 # Module-level data
 # ---------------------------------------------------------------------------
-WORLD_MAP, ZONE_TILES = _load_map()
-ITEM_DEFS             = _load_items()
-ITEM_POSITIONS        = _load_item_positions()
+WORLD_MAP, ZONE_TILES, RADIATION_MAP, _MAP_ITEM_POSITIONS = _load_map()
+ITEM_DEFS      = _load_items()
+
+# item_positions: map.json takes priority; fall back to standalone file
+if _MAP_ITEM_POSITIONS:
+    ITEM_POSITIONS = _MAP_ITEM_POSITIONS
+else:
+    ITEM_POSITIONS = _load_item_positions_legacy()
 
 
 # ---------------------------------------------------------------------------
@@ -168,3 +191,12 @@ def get_item_def(item_id: str) -> dict:
 
 def get_items_in_zone(zone_x: int, zone_y: int) -> list:
     return ITEM_POSITIONS.get(f"{zone_x},{zone_y}", [])
+
+
+def get_zone_radiation(zone_x: int, zone_y: int) -> float:
+    """Return the ambient radiation level for a zone (from radiation_map).
+    Values in radiation_map are 0-6; we normalise to a rate multiplier."""
+    try:
+        return float(RADIATION_MAP[zone_y][zone_x])
+    except (IndexError, TypeError):
+        return 1.0

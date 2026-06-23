@@ -1,33 +1,67 @@
 {
   "_comment": "Item definitions. Key = item_id used everywhere else. Add as many fields as you need.",
-
   "health_pack": {
     "name": "Health Pack",
     "description": "Restores 30 hunger.",
-    "effect": { "hunger": 30 }
+    "effect": {
+      "hunger": 30
+    },
+    "category": "consumable"
   },
-
   "rad_pill": {
     "name": "Rad-Away Pill",
     "description": "Reduces radiation by 25.",
-    "effect": { "radiation": -25 }
+    "effect": {
+      "radiation": -25
+    },
+    "category": "consumable"
   },
-
   "key": {
     "name": "Key",
     "description": "Opens a locked box.",
-    "effect": {}
+    "effect": {},
+    "category": "key"
   },
-
   "map_fragment": {
     "name": "Map Fragment",
     "description": "Reveals nearby zones on the overworld map.",
-    "effect": { "reveal_radius": 2 }
+    "effect": {
+      "reveal_radius": 2
+    },
+    "category": "tool"
   },
-
   "food_can": {
     "name": "Food Can",
-    "description": "Restores 15 hunger.",
-    "effect": { "hunger": 15 }
+    "description": "Restores 15 hunger. Store in inventory to eat later.",
+    "effect": {
+      "hunger": 15
+    },
+    "category": "food"
+  },
+  "canned_goods": {
+    "name": "Canned Goods",
+    "description": "Hearty preserved food. Restores 25 hunger.",
+    "effect": {
+      "hunger": 25
+    },
+    "category": "food"
+  },
+  "energy_bar": {
+    "name": "Energy Bar",
+    "description": "Quick burst of calories. Restores 10 hunger instantly.",
+    "effect": {
+      "hunger": 10
+    },
+    "category": "food"
+  },
+  "rad_suit": {
+    "name": "Radiation Suit",
+    "description": "Worn suit that reduces all radiation by 60% while equipped.",
+    "effect": {
+      "rad_resist": 0.6
+    },
+    "category": "equipment",
+    "equippable": true,
+    "slot": "body"
   }
 }
