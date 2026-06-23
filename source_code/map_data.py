@@ -75,7 +75,7 @@ ZONE_WATER     = 4
 # Load
 # ---------------------------------------------------------------------------
 def _load_map():
-    with open(MAP_JSON, "r") as f:
+    with open(MAP_JSON, "r", encoding="utf-8") as f:
         data = json.load(f)
  
     world_map     = data.get("world_map",     [[ZONE_DEFAULT]*ZONE_COUNT_X]*ZONE_COUNT_Y)

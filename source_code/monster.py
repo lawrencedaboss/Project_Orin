@@ -2,6 +2,7 @@ import random
 import math
 import pygame
 from config import MONSTER_SPEED, MONSTER_WANDER_SPEED
+from map_data import get_zone_doors
 
 DESPAWN_ZONE_DISTANCE = 10   # hard cap — instantly deactivate beyond this
 LEAVE_ZONE_DISTANCE   = 7    # monster actively retreats once it exceeds this
@@ -14,6 +15,14 @@ _SPAWN_OFFSETS = [
     for dy in range(-8, 9)
     if 6.0 <= math.sqrt(dx * dx + dy * dy) <= 7.0
 ]
+
+# Which door side the monster enters through when crossing each boundary
+_ENTRY_SIDE = {
+    'east':  'west',   # monster crossed east edge → enters next zone via its west door
+    'west':  'east',   # monster crossed west edge → enters next zone via its east door
+    'south': 'north',  # monster crossed south edge → enters next zone via its north door
+    'north': 'south',  # monster crossed north edge → enters next zone via its south door
+}
 
 
 class Monster:
@@ -35,7 +44,7 @@ class Monster:
 
         # Leaving state: once triggered the monster flees to the world edge
         self._leaving       = False
-        self._leave_timer   = 0.0   # how long since zone-dist exceeded threshold
+        self._leave_timer   = 0.0
 
         self._wander_vx    = 1.0
         self._wander_vy    = 0.0
@@ -54,6 +63,29 @@ class Monster:
         self._wander_vy    = math.sin(angle)
         self._wander_timer = random.uniform(1.5, 3.5)
 
+    def _door_entry_pos(self, entering_from):
+        """
+        Return the (x, y) screen position for a monster entering a zone
+        through the given side ('north', 'south', 'east', 'west').
+        Positions the monster just inside the doorway at the midpoint of that edge.
+        """
+        cx = self.screen_width  / 2
+        cy = self.screen_height / 2
+        margin = 20
+        if entering_from == 'west':
+            return margin, cy
+        if entering_from == 'east':
+            return self.screen_width - margin, cy
+        if entering_from == 'north':
+            return cx, margin
+        if entering_from == 'south':
+            return cx, self.screen_height - margin
+        return cx, cy
+
+    def _zone_has_door(self, zx, zy, side):
+        """Return True if zone (zx, zy) has a door on the given side."""
+        return side in get_zone_doors(zx, zy)
+
     def _spawn_near_player(self, player_zone_x, player_zone_y):
         candidates = _SPAWN_OFFSETS[:]
         random.shuffle(candidates)
@@ -68,8 +100,16 @@ class Monster:
 
         self.loading_zone_x = spawn_x
         self.loading_zone_y = spawn_y
-        self.x = random.randint(50, self.screen_width  - 50)
-        self.y = random.randint(50, self.screen_height - 50)
+
+        # Spawn at a doorway of the chosen zone if one exists, else random
+        doors = get_zone_doors(spawn_x, spawn_y)
+        if doors:
+            entry_side = random.choice(doors)
+            self.x, self.y = self._door_entry_pos(entry_side)
+        else:
+            self.x = random.randint(50, self.screen_width  - 50)
+            self.y = random.randint(50, self.screen_height - 50)
+
         self.rect.x = int(self.x)
         self.rect.y = int(self.y)
         self.active       = True
@@ -81,7 +121,6 @@ class Monster:
 
     def update(self, target_x, target_y, player_zone_x, player_zone_y, dt,
                hiding=False):
-        # --- Inactive: count down respawn ---
         if not self.active:
             self.respawn_timer -= dt
             if self.respawn_timer <= 0:
@@ -90,28 +129,23 @@ class Monster:
 
         zone_dist = self._zone_distance(player_zone_x, player_zone_y)
 
-        # --- Hard despawn cap ---
         if zone_dist >= DESPAWN_ZONE_DISTANCE:
             self._deactivate()
             return
 
-        # --- Check if monster should start leaving ---
-        # Triggered when:  zone_dist > LEAVE_ZONE_DISTANCE  OR  player is hiding
-        # Once leaving it keeps fleeing until it despawns at the world edge.
         if not self._leaving:
             if zone_dist >= LEAVE_ZONE_DISTANCE:
                 self._leave_timer += dt
-                if self._leave_timer >= 2.0:   # must stay far for 2 s before committing
+                if self._leave_timer >= 2.0:
                     self._leaving = True
             else:
-                self._leave_timer = 0.0        # reset timer if player gets close again
+                self._leave_timer = 0.0
 
         if self._leaving:
             self._move_flee_world_edge(dt)
-            self._cross_zones()
+            self._cross_zones(ignore_doors=True)
             return
 
-        # --- Normal behaviour ---
         in_same_zone = (self.loading_zone_x == player_zone_x and
                         self.loading_zone_y == player_zone_y)
 
@@ -159,7 +193,6 @@ class Monster:
 
     def _move_flee_world_edge(self, dt):
         """Move directly toward the nearest world edge to leave the map."""
-        # Pick closest edge: left=0, right=max_x, top=0, bottom=max_y
         dist_left   = self.loading_zone_x
         dist_right  = (self.zone_count_x - 1) - self.loading_zone_x
         dist_top    = self.loading_zone_y
@@ -175,47 +208,77 @@ class Monster:
         else:
             self.y += MONSTER_WANDER_SPEED * dt
 
-    def _cross_zones(self):
-        """Handle zone boundary crossings and world-edge despawn when leaving."""
-        ZONE_MARGIN = 30
+    def _cross_zones(self, ignore_doors=False):
+        """
+        Handle zone boundary crossings.
+        When ignore_doors=False (normal movement), the monster can only cross
+        into a zone through one of its doorways; otherwise it bounces back.
+        When ignore_doors=True (fleeing), walls are ignored so the monster
+        can escape to the world edge and despawn.
+        """
+        MARGIN = 20
 
+        # --- Horizontal crossings ---
         if self.x >= self.screen_width:
-            if self.loading_zone_x < self.zone_count_x - 1:
-                self.loading_zone_x += 1
-                self.x = ZONE_MARGIN
-                self._wander_vx = abs(self._wander_vx)
+            new_zx = self.loading_zone_x + 1
+            if new_zx < self.zone_count_x:
+                if ignore_doors or self._zone_has_door(new_zx, self.loading_zone_y, 'west'):
+                    self.loading_zone_x = new_zx
+                    self.x, self.y = self._door_entry_pos('west') if not ignore_doors else (MARGIN, self.y)
+                    self._wander_vx = abs(self._wander_vx)
+                else:
+                    # No west door — bounce back
+                    self.x = self.screen_width - MARGIN
+                    self._wander_vx = -abs(self._wander_vx)
             else:
-                # Hit world edge while leaving — despawn
                 if self._leaving:
                     self._deactivate(); return
                 self.x = self.screen_width - 1
                 self._wander_vx = -abs(self._wander_vx)
+
         elif self.x < 0:
-            if self.loading_zone_x > 0:
-                self.loading_zone_x -= 1
-                self.x = self.screen_width - ZONE_MARGIN
-                self._wander_vx = -abs(self._wander_vx)
+            new_zx = self.loading_zone_x - 1
+            if new_zx >= 0:
+                if ignore_doors or self._zone_has_door(new_zx, self.loading_zone_y, 'east'):
+                    self.loading_zone_x = new_zx
+                    self.x, self.y = self._door_entry_pos('east') if not ignore_doors else (self.screen_width - MARGIN, self.y)
+                    self._wander_vx = -abs(self._wander_vx)
+                else:
+                    self.x = MARGIN
+                    self._wander_vx = abs(self._wander_vx)
             else:
                 if self._leaving:
                     self._deactivate(); return
                 self.x = 0
                 self._wander_vx = abs(self._wander_vx)
 
+        # --- Vertical crossings ---
         if self.y >= self.screen_height:
-            if self.loading_zone_y < self.zone_count_y - 1:
-                self.loading_zone_y += 1
-                self.y = ZONE_MARGIN
-                self._wander_vy = abs(self._wander_vy)
+            new_zy = self.loading_zone_y + 1
+            if new_zy < self.zone_count_y:
+                if ignore_doors or self._zone_has_door(self.loading_zone_x, new_zy, 'north'):
+                    self.loading_zone_y = new_zy
+                    self.x, self.y = self._door_entry_pos('north') if not ignore_doors else (self.x, MARGIN)
+                    self._wander_vy = abs(self._wander_vy)
+                else:
+                    self.y = self.screen_height - MARGIN
+                    self._wander_vy = -abs(self._wander_vy)
             else:
                 if self._leaving:
                     self._deactivate(); return
                 self.y = self.screen_height - 1
                 self._wander_vy = -abs(self._wander_vy)
+
         elif self.y < 0:
-            if self.loading_zone_y > 0:
-                self.loading_zone_y -= 1
-                self.y = self.screen_height - ZONE_MARGIN
-                self._wander_vy = -abs(self._wander_vy)
+            new_zy = self.loading_zone_y - 1
+            if new_zy >= 0:
+                if ignore_doors or self._zone_has_door(self.loading_zone_x, new_zy, 'south'):
+                    self.loading_zone_y = new_zy
+                    self.x, self.y = self._door_entry_pos('south') if not ignore_doors else (self.x, self.screen_height - MARGIN)
+                    self._wander_vy = -abs(self._wander_vy)
+                else:
+                    self.y = MARGIN
+                    self._wander_vy = abs(self._wander_vy)
             else:
                 if self._leaving:
                     self._deactivate(); return
