@@ -32,7 +32,7 @@ class PauseScreen:
        self.title_surface = self.title_font.render("paused", True, (255, 255, 255))
        self.resume_surface = self.text_font.render("space: resume", True, (220, 220, 220))
        self.quit_surface = self.text_font.render("esc/q: quit", True, (220, 220, 220))
-       self.keybind_surface = self.text_font.render("k: keybinds", True, (220, 220, 220))
+       self.keybind_surface = self.text_font.render("K: keybinds", True, (220, 220, 220))
        self.rebinding_key = None
        self.rebinding_action = None
 
@@ -64,11 +64,12 @@ class PauseScreen:
            screen.blit(overlay, (0, 0))
 
 
-           panel = pygame.Surface((400, 350), pygame.SRCALPHA)
+           panel = pygame.Surface((400, 450), pygame.SRCALPHA)
            panel.fill((30, 40, 80, 220))
            panel_rect = panel.get_rect(center=(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2))
            screen.blit(panel, panel_rect)
 
+#Rect(left, top, width, height) -> Rect
 
            title = self.text_font.render("KEYBINDS", True, (255, 255, 255))
            screen.blit(title, (panel_rect.centerx - title.get_width() / 2, panel_rect.top + 20))
@@ -83,7 +84,7 @@ class PauseScreen:
 
 
            hint = self.small_font.render("Arrow keys: navigate | Enter: rebind | Esc: back", True, (150, 150, 150))
-           screen.blit(hint, (panel_rect.centerx - hint.get_width() / 2, panel_rect.bottom - 40))
+           screen.blit(hint, (panel_rect.centerx - hint.get_width() / 2, panel_rect.bottom - 30))
 
 
            pygame.display.flip()
@@ -233,8 +234,8 @@ class InventoryScreen:
 
 
            # Main panel
-           panel_width = 500
-           panel_height = 450
+           panel_width = 600
+           panel_height = 500
            panel_x = (SCREEN_WIDTH - panel_width) // 2
            panel_y = (SCREEN_HEIGHT - panel_height) // 2
            
