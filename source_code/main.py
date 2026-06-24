@@ -146,6 +146,8 @@ class Game:
 
    def _try_fire(self):
        if pygame.mouse.get_pressed()[0] and not self.player.hiding:
+           if self.player.ammo <= 0:
+               return
            mx, my = pygame.mouse.get_pos()
            mx -= MAP_LEFT
            my -= MAP_TOP
@@ -153,6 +155,7 @@ class Game:
            dx = mx - px
            dy = my - py
            self.bullets.fire(px, py, dx, dy, self.player.loadingzonex, self.player.loadingzoney)
+           self.player.ammo -= 1
 
    # ---- AI thread ----
 
@@ -259,7 +262,8 @@ class Game:
                return True
        return False
 
-   def try_eat_food(self):
+   def try_pickup_food(self):
+       """Pick up the nearest food item and store it in inventory."""
        nearest, nearest_dist = None, None
        for food_item in self.food_items_in_player_zone():
            dx = self.player.x - food_item.x
@@ -269,7 +273,7 @@ class Game:
                if nearest is None or d < nearest_dist:
                    nearest, nearest_dist = food_item, d
        if nearest is not None:
-           self.player.eat(FOOD_HUNGER_RESTORE)
+           self.player.inventory.append(nearest.item_id)
            self.food.remove(nearest)
            SFX.play(SND_COLLECT)
            return True
@@ -301,7 +305,7 @@ class Game:
                if d < 60 and (nearest_box is None or d < nbd):
                    nearest_box, nbd = box, d
            if nearest_food is not None and (nearest_box is None or nfd <= nbd):
-               self.player.eat(FOOD_HUNGER_RESTORE)
+               self.player.inventory.append(nearest_food.item_id)
                self.food.remove(nearest_food)
                SFX.play(SND_COLLECT)
                return True
@@ -311,7 +315,7 @@ class Game:
                return True
            return False
        if food_avail:
-           return self.try_eat_food()
+           return self.try_pickup_food()
        if box_avail:
            return self.try_collect_object()
        return False
@@ -558,11 +562,11 @@ class Game:
            food_nearby = self.is_in_range_of_food()
            box_nearby  = self.is_in_range_of_box()
            if box_nearby and food_nearby:
-               hint_text = f"{k_action}: take item / eat food  |  {k_inv}: inventory"
+               hint_text = f"{k_action}: take item / pick up food  |  {k_inv}: inventory"
            elif box_nearby:
                hint_text = f"{k_action}: take item  |  {k_inv}: inventory"
            elif food_nearby:
-               hint_text = f"{k_action}: eat food  |  {k_inv}: inventory"
+               hint_text = f"{k_action}: pick up food  |  {k_inv}: inventory"
            else:
                hint_text = f"{k_inv}: inventory"
 
@@ -589,6 +593,11 @@ class Game:
                         int(self.player.hunger / 100 * 216), 18))
        self.screen.blit(self.font.render("Radiation", True, (255, 255, 255)), (hud_x + 230, hud_y + 2))
        self.screen.blit(self.font.render("Hunger",    True, (255, 255, 255)), (hud_x + 230, hud_y + 32))
+
+       # Ammo counter
+       ammo_color = (255, 220, 50) if self.player.ammo > 0 else (200, 60, 60)
+       ammo_surf = self.font.render(f"Ammo: {self.player.ammo}", True, ammo_color)
+       self.screen.blit(ammo_surf, (hud_x, hud_y + 58))
 
        # Rad suit equipped indicator
        if self.player.equipment.get('body'):

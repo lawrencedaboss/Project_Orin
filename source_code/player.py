@@ -30,6 +30,7 @@ class Player:
 
        # inventory: list of item_id strings (consumables / keys / etc.)
        self.inventory = []
+       self.ammo = 30
 
        # equipment slots: dict of slot_name -> item_id (None = empty)
        self.equipment = {
@@ -128,6 +129,8 @@ class Player:
            self.hunger = max(0, min(100, self.hunger + effect['hunger']))
        if 'radiation' in effect:
            self.radiation = max(0, self.radiation + effect['radiation'])
+       if 'ammo' in effect:
+           self.ammo = min(self.ammo + effect['ammo'], 99)
 
        self.inventory.remove(target_id)
        return True
