@@ -65,11 +65,9 @@ TILE_EMPTY  = 0
 TILE_WALL   = 1
 TILE_OBJECT = 2
  
-ZONE_DEFAULT   = 0
+ZONE_FACTORY  = 0
 ZONE_FOREST    = 1
-ZONE_RUINS     = 2
-ZONE_WASTELAND = 3
-ZONE_WATER     = 4
+
  
 # ---------------------------------------------------------------------------
 # Load
@@ -78,7 +76,7 @@ def _load_map():
     with open(MAP_JSON, "r", encoding="utf-8") as f:
         data = json.load(f)
  
-    world_map     = data.get("world_map",     [[ZONE_DEFAULT]*ZONE_COUNT_X]*ZONE_COUNT_Y)
+    world_map     = data.get("world_map",     [[ZONE_FACTORY]*ZONE_COUNT_X]*ZONE_COUNT_Y)
     radiation_map = data.get("radiation_map", [[1]*ZONE_COUNT_X]*ZONE_COUNT_Y)
     item_positions= data.get("item_positions",{})
  
