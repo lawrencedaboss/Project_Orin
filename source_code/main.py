@@ -16,6 +16,7 @@ from map_data import (get_zone_type, get_items_in_zone,
                       get_zone_grid, get_zone_radiation,
                       TILE_EMPTY, TILE_WALL, TILE_OBJECT, UNIT_W, UNIT_H,
                       ZONE_TILE_WIDTH, ZONE_TILE_HEIGHT)
+from sprites import ZONE_RENDERER
 from bullets import BulletsManager
 from bullets import Bullet
 from food import Food
@@ -47,7 +48,6 @@ class GameOverScreen:
            screen.blit(self.title_surface, (340, 220))
            screen.blit(self.prompt_surface, (350, 300))
            pygame.display.flip()
-
 
 
 

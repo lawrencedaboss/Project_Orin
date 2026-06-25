@@ -109,9 +109,8 @@
       [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 3, 3]
     ]
   },
-
-  "zone_tiles": {
     "_comment_zone_tiles": "Sparse â€” only add entries for zones that need custom tiles. Key: 'zone_x,zone_y'. Value: 20 rows x 12 cols. Tile IDs: 0=empty 1=wall 2=object",
+  "zone_tiles": {
     "0,0": [
       [1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1],
       [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
