@@ -426,9 +426,7 @@ class Game:
                for wall in self._wall_rects:
                    if bullet.rect.colliderect(wall):
                        if bullet.collidewall:
-                           bullet.vx = -0.99 * bullet.vx
-                           bullet.vy = -0.99 * bullet.vy
-                           bullet.collidewall = False
+                          self.bullets.bullets.remove(bullet)
                        break
 
        # Bullet-animal collisions
@@ -544,7 +542,7 @@ class Game:
 
        self.screen.blit(self.game_surface, (MAP_LEFT, MAP_TOP))
        pygame.draw.rect(self.screen, (100, 100, 120),
-                        (MAP_LEFT - 2, MAP_TOP - 2, MAP_WIDTH + 4, MAP_HEIGHT + 4), 2)
+                       (MAP_LEFT - 2, MAP_TOP - 2, MAP_WIDTH + 1, MAP_HEIGHT + 4), 2)
 
        # ---- HUD hints ----
        k_hide   = pygame.key.name(KEYBINDS['hide']).upper()
