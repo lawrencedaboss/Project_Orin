@@ -52,7 +52,7 @@ SND_DEATH   = "death"
 # ---------------------------------------------------------------------------
 MUS_MENU    = "menu"
 MUS_TENSE   = "tense"
-MUS_AMBIENT = ["spopoky", "slow_sker1"]   # rotated randomly during gameplay
+MUS_AMBIENT = ["spokoky3", "slow_sker1"]   # rotated randomly during gameplay
 
 
 # ===========================================================================
@@ -130,7 +130,7 @@ class MusicManager:
 
     def __init__(self):
         self._current: str | None  = None
-        self._volume: float        = 0.5
+        self._volume: float        = 0.02
         self._rotation: list[str]  = []     # track names currently rotating
         self._in_rotation: bool    = False
 

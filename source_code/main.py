@@ -8,7 +8,7 @@ from monster import Monster
 from animals import Animal
 from objects import Box
 from title_screen import TitleScreen
-from config import (SCREEN_WIDTH, SCREEN_HEIGHT, MAP_WIDTH, MAP_HEIGHT,
+from config import (SCREEN_WIDTH, SCREEN_HEIGHT, MAP_WIDTH, MAP_HEIGHT, 
                     MAP_LEFT, MAP_TOP, ZONE_COUNT_X, ZONE_COUNT_Y, FPS,
                     ANIMAL_COUNT, RADIATION_RATE, FOOD_HUNGER_RESTORE, KEYBINDS)
 from sounds import SFX, MUSIC, init_audio, SND_COLLECT, SND_HIDE, SND_UNHIDE, SND_BEEP, SND_DEATH, MUS_MENU, MUS_AMBIENT, MUS_TENSE
@@ -22,7 +22,7 @@ from bullets import Bullet
 from food import Food
 from inventory_screen import InventoryScreen
 from pause_screen import PauseScreen
-
+ 
  
 
 # ---------------------------------------------------------------------------
@@ -501,7 +501,7 @@ class Game:
 
        if _zone_dist is not None and _zone_dist <= 4:
            if MUSIC.current != MUS_TENSE:
-               MUSIC.play(MUS_TENSE)
+               MUSIC.play(MUS_TENSE, loop=False)
        else:
            if not MUSIC.in_rotation:
                MUSIC.start_rotation(MUS_AMBIENT)
