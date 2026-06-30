@@ -23,13 +23,13 @@ from food import Food
 from inventory_screen import InventoryScreen
 from pause_screen import PauseScreen
 
-
+ 
 
 # ---------------------------------------------------------------------------
 # Game Over screen
-# ---------------------------------------------------------------------------
+# --------------------------------------------------------------------------- 
 class GameOverScreen:
-   def __init__(self):
+   def __init__(self): 
        self.font = pygame.font.SysFont('Arial', 48)
        self.sub_font = pygame.font.SysFont('Arial', 28)
        self.title_surface = self.font.render("Game Over", True, (200, 0, 0))
@@ -348,6 +348,7 @@ class Game:
    # ---- update ----
 
    def update(self, dt):
+       MUSIC.update()
        _zone_dist  = None
        _pixel_dist = None
 
@@ -502,8 +503,8 @@ class Game:
            if MUSIC.current != MUS_TENSE:
                MUSIC.play(MUS_TENSE)
        else:
-           if MUSIC.current != MUS_AMBIENT:
-               MUSIC.play(MUS_AMBIENT)
+           if not MUSIC.in_rotation:
+               MUSIC.start_rotation(MUS_AMBIENT)
 
    # ---- render ----
 
@@ -623,7 +624,7 @@ class Game:
            return
 
        self.clock.tick(100)
-       MUSIC.play(MUS_AMBIENT)
+       MUSIC.start_rotation(MUS_AMBIENT)
 
        self._ai_running = True
        self._ai_thread = threading.Thread(target=self._ai_loop, daemon=True, name='AI-Thread')
