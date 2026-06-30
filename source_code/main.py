@@ -107,6 +107,7 @@ class Game:
        self._lock      = threading.Lock()
        self._ai_thread = None
        self._ai_running = False
+       self._paused    = False   # True while pause/inventory screen is open
 
        self._beep_sound  = self._create_beep()
        self._drone_sound = self._create_drone()
@@ -166,6 +167,9 @@ class Game:
            now = _time.perf_counter()
            dt  = min(now - last, 0.05)
            last = now
+           if self._paused:
+               _time.sleep(interval)
+               continue
            with self._lock:
                if self.player.alive and self.running:
                    if self.player.hiding:
@@ -330,11 +334,12 @@ class Game:
                self._try_fire()
            if event.type == pygame.KEYDOWN:
                if event.key == KEYBINDS['pause']:
+                   self._paused = True
                    resume = self.pause_screen.run(self.screen, self.clock)
+                   self._paused = False
+                   self.clock.tick()  # discard accumulated time
                    if not resume:
                        self.running = False
-                   else:
-                       self.clock.tick(FPS)
                if event.key == KEYBINDS['hide']:
                    was_hiding = self.player.hiding
                    self.player.toggle_hiding(self.boxes)
@@ -343,7 +348,10 @@ class Game:
                if event.key == KEYBINDS['action']:
                    self.try_use_action()
                if event.key == KEYBINDS['inventory']:
+                   self._paused = True
                    self.inventory_screen.run(self.screen, self.clock, self.player, self.boxes)
+                   self._paused = False
+                   self.clock.tick()  # discard accumulated time
 
    # ---- update ----
 
