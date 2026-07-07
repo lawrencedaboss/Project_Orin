@@ -533,11 +533,11 @@ class Game:
             self.game_surface.blit(tint, (0, 0))
 
         ZONE_RENDERER.render(
-    self.game_surface,
-    self.player.loadingzonex,
-    self.player.loadingzoney,
-    get_zone_type(self.player.loadingzonex, self.player.loadingzoney)
-)
+            self.game_surface,
+            self.player.loadingzonex,
+            self.player.loadingzoney,
+            get_zone_type(self.player.loadingzonex, self.player.loadingzoney)
+        )
         self.player.draw(self.game_surface, dt)
 
         for box in self.boxes:
@@ -551,11 +551,11 @@ class Game:
         self.bullets.draw(self.game_surface)
 
         if self.monster.active and self._in_player_zone(self.monster):
-            self.monster.draw(self.game_surface)
+            self.monster.draw(self.game_surface, dt)
 
         for animal in self.animals:
             if self._in_player_zone(animal):
-                animal.draw(self.game_surface)
+                animal.draw(self.game_surface, dt)
 
         self.screen.blit(self.game_surface, (MAP_LEFT, MAP_TOP))
         pygame.draw.rect(self.screen, (100, 100, 120),

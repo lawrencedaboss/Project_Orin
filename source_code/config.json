@@ -21,7 +21,7 @@
   },
   "balance": {
     "monster_speed": 800,
-    "monster_wander_speed": 800,
+    "monster_wander_speed": 2000,
     "animal_speed": 80,
     "animal_wander_interval_min": 2,
     "animal_wander_interval_max": 5,
