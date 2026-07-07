@@ -1,7 +1,7 @@
 import pygame
 
 from map_data import get_item_def
-
+from sprites import draw_item_box
 
 class Box:
     WIDTH = 32
@@ -36,13 +36,7 @@ class Box:
         self.rect.y = int(self.y)
 
     def draw(self, surface):
-        box_color = (70, 70, 80) if self.collected else self._color_for_item()
-        pygame.draw.rect(surface, box_color, self.rect)
-        pygame.draw.rect(surface, (255, 255, 255), self.rect, 2)
-        if not self.collected:
-            object_rect = pygame.Rect(self.x + 8, self.y + 8, 16, 16)
-            pygame.draw.rect(surface, (255, 255, 255), object_rect)
-
+        draw_item_box(surface, self.rect, self.item_id, self.collected)
     def collect(self, player):
         if self.collected:
             return False

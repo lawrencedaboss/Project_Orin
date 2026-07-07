@@ -3,6 +3,7 @@ import random
 import math
 from config import ANIMAL_SPEED, ANIMAL_WANDER_INTERVAL_MIN, ANIMAL_WANDER_INTERVAL_MAX
 from map_data import get_zone_grid, TILE_WALL
+from sprites import draw_animal, ANIMAL_DEER, ANIMAL_MOOSE, ANIMAL_RABBIT
 
 
 class Animal:
@@ -33,6 +34,10 @@ class Animal:
         # Current normalised movement direction (used by wall avoidance)
         self._dir_x = 0.0
         self._dir_y = 0.0
+        # sprite state
+        self._anim_t    = 0.0
+        self.animal_type = ANIMAL_DEER   # subclasses / spawn code can override
+
 
     # ------------------------------------------------------------------
     # Wall helpers
@@ -172,5 +177,9 @@ class Animal:
     # Draw
     # ------------------------------------------------------------------
 
-    def draw(self, surface):
-        pygame.draw.rect(surface, (125, 100, 10), self.rect)
+    def draw(self, surface, dt=0.0):
+            moving = (abs(self._dir_x) > 0.01 or abs(self._dir_y) > 0.01)
+            if moving:
+                self._anim_t += dt
+            draw_animal(surface, self.rect, self.animal_type,
+                        self._dir_x, self._dir_y, moving, self._anim_t)

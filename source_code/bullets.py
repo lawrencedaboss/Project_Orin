@@ -1,5 +1,6 @@
 import pygame
 import math
+from sprites import draw_bullet as _draw_bullet_sprite
 
 class Bullet:
     def __init__(self, x, y, vx, vy, speed=900, radius=4, color=(255, 220, 50), loading_zone_x=0, loading_zone_y=0,collidemonster=True,collidewall=True):
@@ -32,7 +33,9 @@ class Bullet:
                 self.walltime=0
 
     def draw(self, screen):
-        self.rect=pygame.draw.circle(screen, self.color, (int(self.x), int(self.y)), self.radius)
+        _draw_bullet_sprite(screen, self.x, self.y, self.radius)
+        self.rect = pygame.Rect(int(self.x-self.radius), int(self.y-self.radius), self.radius*2, self.radius*2)
+
 
 
 class BulletsManager:

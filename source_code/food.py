@@ -1,6 +1,7 @@
 import pygame
 
 from config import FOOD_HUNGER_RESTORE
+from sprites import draw_food as _draw_food_sprite
 
 class Food:
     def __init__(self, x, y, size, loading_zone_x, loading_zone_y, item_id="food_can"):
@@ -17,4 +18,4 @@ class Food:
         pass
 
     def draw(self, surface):
-        pygame.draw.rect(surface, (255, 100, 100), self.rect)
+        _draw_food_sprite(surface, self.rect, self.item_id)
