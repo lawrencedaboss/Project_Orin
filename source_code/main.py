@@ -532,7 +532,12 @@ class Game:
             tint.fill((0, 255, 80, tint_alpha))
             self.game_surface.blit(tint, (0, 0))
 
-        self._render_tiles(self.game_surface)
+        ZONE_RENDERER.render(
+    self.game_surface,
+    self.player.loadingzonex,
+    self.player.loadingzoney,
+    get_zone_type(self.player.loadingzonex, self.player.loadingzoney)
+)
         self.player.draw(self.game_surface, dt)
 
         for box in self.boxes:
