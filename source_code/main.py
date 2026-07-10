@@ -412,11 +412,12 @@ class Game:
                 # Natural decay when nothing is irradiating
                 self.player.radiation = max(0, self.player.radiation - dt * 1.0)
 
-            # ---- Collision colour feedback ----
+            # ---- Monster catch ----
             if (self.monster.active and self._in_player_zone(self.monster)
                     and self.player.rect.colliderect(self.monster.rect)
                     and not self.player.hiding):
                 self.player.color = (255, 100, 100)
+                self.player.alive = False
             else:
                 self.player.color = (0, 255, 0)
 

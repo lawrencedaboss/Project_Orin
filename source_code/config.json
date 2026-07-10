@@ -20,11 +20,11 @@
     "shoot":"q"
   },
   "balance": {
-    "monster_speed": 800,
-    "monster_wander_speed": 2000,
-    "animal_speed": 80,
-    "animal_wander_interval_min": 2,
-    "animal_wander_interval_max": 5,
+    "monster_speed": 600,
+    "monster_wander_speed": 600,
+    "animal_speed": 160,
+    "animal_wander_interval_min": 5,
+    "animal_wander_interval_max": 10,
     "player_base_speed": 500,
     "hunger_rate": 1.25,
     "hunger_speed_multiplier": 7.5,

@@ -18,8 +18,8 @@ SPRITE_DIR = os.path.join(os.getcwd(), "assets", "animations")
 
 
 # ---- display sizes (visuals only, rect/collision sizes never change) ----
-_SZ_P = (48, 64)   # player
-_SZ_M = (52, 76)   # monster
+_SZ_P = (20, 20)   # player
+_SZ_M = (32, 32)   # monster
 _SZ_A = (38, 38)   # deer / moose
 _SZ_R = (26, 26)   # rabbit
 _SZ_I = (26, 26)   # items / food
@@ -74,37 +74,109 @@ def _crop_scale(img, crop, target):
     return canvas
 
 
-def _single(fname, bg, crop, target):
-    """Load one image with one content crop → list of one Surface."""
+# ---------------------------------------------------------------------------
+# Content-aware frame detection
+# ---------------------------------------------------------------------------
+# Generated sheets vary in canvas size (4096x2048 up to 8192x8192) and in how
+# much of that canvas the art actually occupies, so slicing a sheet into a
+# fixed cols x rows grid cuts frames at the wrong boundaries (empty margins
+# get treated as frames, or one frame gets split across two cells). Instead
+# we find the actual blobs of non-background pixels via connected-component
+# analysis and crop each one individually.
+
+def _merge_close_rects(rects, gap):
+    """Union rects that are within `gap` px of each other (repeatedly, until
+    stable). Needed because thin details — claws, hair strands, a gun barrel —
+    are often detected as separate components from the main body."""
+    rects = list(rects)
+    changed = True
+    while changed:
+        changed = False
+        out  = []
+        used = [False] * len(rects)
+        for i in range(len(rects)):
+            if used[i]:
+                continue
+            r = rects[i].copy()
+            for j in range(i + 1, len(rects)):
+                if used[j]:
+                    continue
+                if r.inflate(gap, gap).colliderect(rects[j]):
+                    r = r.union(rects[j])
+                    used[j] = True
+                    changed = True
+            out.append(r)
+        rects = out
+    return rects
+
+
+def _content_rects(img, min_frac=0.12):
+    """Return the significant content blobs on a sheet (colourkey/alpha
+    already applied to `img`), largest-relative noise filtered out."""
+    iw, ih = img.get_size()
+    mask  = pygame.mask.from_surface(img, threshold=30)
+    rects = mask.get_bounding_rects()
+    if not rects:
+        return []
+    gap   = max(15, int(min(iw, ih) * 0.01))
+    rects = _merge_close_rects(rects, gap)
+    max_area = max(r.w * r.h for r in rects)
+    return [r for r in rects if r.w * r.h >= max_area * min_frac]
+
+
+def _reading_order(rects):
+    """Sort blobs top-to-bottom by row, left-to-right within each row —
+    the order animation frames are laid out in on a sheet."""
+    rows = []
+    for r in sorted(rects, key=lambda r: r.centery):
+        placed = False
+        for row in rows:
+            ry = row[0].centery
+            if abs(r.centery - ry) < max(r.height, row[0].height) * 0.5:
+                row.append(r)
+                placed = True
+                break
+        if not placed:
+            rows.append([r])
+    rows.sort(key=lambda row: sum(r.centery for r in row) / len(row))
+    ordered = []
+    for row in rows:
+        row.sort(key=lambda r: r.centerx)
+        ordered.extend(row)
+    return ordered
+
+
+def _single(fname, bg, target):
+    """Load one image, auto-detect its content blob, crop + scale to target."""
     colorkey = (0, 0, 0) if bg == 'black' else None
-    img  = _load_img(fname, colorkey)
-    surf = _crop_scale(img, crop, target)
+    img = _load_img(fname, colorkey)
+    if img is None:
+        return []
+    rects = _content_rects(img)
+    if not rects:
+        return []
+    bbox = rects[0]
+    for r in rects[1:]:
+        bbox = bbox.union(r)
+    surf = _crop_scale(img, (bbox.left, bbox.top, bbox.right, bbox.bottom), target)
     return [surf] if surf else []
 
 
-def _grid(fname, bg, cols, rows, n_frames, target):
+def _grid(fname, bg, target):
     """
-    Slice a sheet into a cols×rows grid, take up to n_frames frames.
-    Each cell is scaled to target. Empty / near-empty cells are kept
-    (we just scale the whole cell — colourkey handles black removal).
+    Auto-detect every animation frame on a sheet and return them in on-sheet
+    (reading) order. Each frame is cropped to its own content box and scaled
+    independently, so frame sizes don't drift between poses on the same sheet.
     """
     colorkey = (0, 0, 0) if bg == 'black' else None
     img = _load_img(fname, colorkey)
     if img is None:
         return []
-    iw, ih = img.get_size()
-    cw, ch = iw // cols, ih // rows
     frames = []
-    for r in range(rows):
-        for c in range(cols):
-            if len(frames) >= n_frames:
-                break
-            crop = (c * cw, r * ch, (c + 1) * cw, (r + 1) * ch)
-            surf = _crop_scale(img, crop, target)
-            if surf:
-                frames.append(surf)
-        if len(frames) >= n_frames:
-            break
+    for r in _reading_order(_content_rects(img)):
+        surf = _crop_scale(img, (r.left, r.top, r.right, r.bottom), target)
+        if surf:
+            frames.append(surf)
     return frames
 
 
@@ -117,78 +189,78 @@ def _load_all():
     S, G = _single, _grid
 
     # ---- player (no gun) ----
-    F['p_walk_left']  = G('normal_walk_left.png',       'black', 3, 2, 4, _SZ_P)
-    F['p_walk_right'] = G('player_walk_right.png',      'black', 3, 2, 4, _SZ_P)
-    F['p_walk_fwd']   = G('player_walk_forward.png',    'black', 3, 2, 4, _SZ_P)
-    F['p_walk_back']  = G('player_walk_back.png',       'black', 3, 2, 6, _SZ_P)
+    F['p_walk_left']  = G('normal_walk_left.png',       'black', _SZ_P)
+    F['p_walk_right'] = G('player_walk_right.png',      'black', _SZ_P)
+    F['p_walk_fwd']   = G('player_walk_forward.png',    'black', _SZ_P)
+    F['p_walk_back']  = G('player_walk_back.png',       'black', _SZ_P)
 
     # ---- player gun stands ----
-    F['p_gun_stand_front'] = S('player_gun_stand_front.png','transparent',(186,57,1641,1075),  _SZ_P)
-    F['p_gun_stand_back']  = S('player_gun_stand_back.png', 'transparent',(789,97,1641,1089),   _SZ_P)
-    F['p_gun_stand_left']  = S('player_gun_stand_left.png', 'transparent',(489,81,1649,1075),   _SZ_P)
-    F['p_gun_stand_right'] = S('player_gun_stand_right.png','transparent',(510,81,1670,1075),   _SZ_P)
+    F['p_gun_stand_front'] = S('player_gun_stand_front.png','transparent', _SZ_P)
+    F['p_gun_stand_back']  = S('player_gun_stand_back.png', 'transparent', _SZ_P)
+    F['p_gun_stand_left']  = S('player_gun_stand_left.png', 'transparent', _SZ_P)
+    F['p_gun_stand_right'] = S('player_gun_stand_right.png','transparent', _SZ_P)
 
     # ---- player gun walk ----
-    F['p_gun_walk_left']  = G('player_gun_left_walk.png',    'black', 3, 2, 4, _SZ_P)
-    F['p_gun_walk_right'] = G('player_gun_right_walk.png',   'black', 3, 2, 4, _SZ_P)
-    F['p_gun_walk_fwd']   = G('player_gun_walk_forward.png', 'black', 3, 2, 6, _SZ_P)
-    F['p_gun_walk_back']  = G('player_gun_walk_back.png',    'black', 3, 2, 6, _SZ_P)
+    F['p_gun_walk_left']  = G('player_gun_left_walk.png',    'black', _SZ_P)
+    F['p_gun_walk_right'] = G('player_gun_right_walk.png',   'black', _SZ_P)
+    F['p_gun_walk_fwd']   = G('player_gun_walk_forward.png', 'black', _SZ_P)
+    F['p_gun_walk_back']  = G('player_gun_walk_back.png',    'black', _SZ_P)
 
     # ---- suit stands ----
-    F['suit_stand_front'] = S('suit_gun_stand_front.png','transparent',(818,214,1391,1073), _SZ_P)
-    F['suit_stand_back']  = S('suit_gun_stand_back.png', 'transparent',(818,214,1391,1088), _SZ_P)
-    F['suit_stand_left']  = S('suit_gun_stand_left.png', 'transparent',(778,247,1324,1074), _SZ_P)
-    F['suit_stand_right'] = S('suit_gun_stand_right.png','transparent',(835,247,1381,1074), _SZ_P)
+    F['suit_stand_front'] = S('suit_gun_stand_front.png','transparent', _SZ_P)
+    F['suit_stand_back']  = S('suit_gun_stand_back.png', 'transparent', _SZ_P)
+    F['suit_stand_left']  = S('suit_gun_stand_left.png', 'transparent', _SZ_P)
+    F['suit_stand_right'] = S('suit_gun_stand_right.png','transparent', _SZ_P)
 
     # ---- suit walk ----
-    F['suit_walk_fwd']   = G('suit_gun_walk_front.png', 'black', 3, 2, 6, _SZ_P)
-    F['suit_walk_back']  = G('suit_gun_walk_back.png',  'black', 3, 3, 4, _SZ_P)
-    F['suit_walk_left']  = G('suit_gun_walk_left.png',  'black', 3, 2, 5, _SZ_P)
-    F['suit_walk_right'] = G('suit_gun_walk_right.png', 'black', 3, 2, 4, _SZ_P)
+    F['suit_walk_fwd']   = G('suit_gun_walk_front.png', 'black', _SZ_P)
+    F['suit_walk_back']  = G('suit_gun_walk_back.png',  'black', _SZ_P)
+    F['suit_walk_left']  = G('suit_gun_walk_left.png',  'black', _SZ_P)
+    F['suit_walk_right'] = G('suit_gun_walk_right.png', 'black', _SZ_P)
 
     # ---- monster stands ----
-    F['mon_stand_front'] = S('monster_front_stand.png', 'transparent',(668,33,1433,1503),  _SZ_M)
-    F['mon_stand_back']  = S('monster_stand_back.png',  'transparent',(613,98,1362,1554),  _SZ_M)
-    F['mon_stand_left']  = S('monster_stand_left.png',  'transparent',(635,66,1290,1457),  _SZ_M)
-    F['mon_stand_right'] = S('monster_stand_right.png', 'transparent',(869,66,1524,1457),  _SZ_M)
+    F['mon_stand_front'] = S('monster_front_stand.png', 'transparent', _SZ_M)
+    F['mon_stand_back']  = S('monster_stand_back.png',  'transparent', _SZ_M)
+    F['mon_stand_left']  = S('monster_stand_left.png',  'transparent', _SZ_M)
+    F['mon_stand_right'] = S('monster_stand_right.png', 'transparent', _SZ_M)
 
     # ---- monster walk ----
-    F['mon_walk_front'] = G('monster_walk_front.png', 'black', 3, 2, 4, _SZ_M)
-    F['mon_walk_back']  = G('monster_walk_back.png',  'black', 3, 2, 4, _SZ_M)
-    F['mon_walk_left']  = G('monster_walk_left.png',  'black', 3, 3, 6, _SZ_M)
-    F['mon_walk_right'] = G('monster_walk_right.png', 'black', 3, 3, 6, _SZ_M)
+    F['mon_walk_front'] = G('monster_walk_front.png', 'black', _SZ_M)
+    F['mon_walk_back']  = G('monster_walk_back.png',  'black', _SZ_M)
+    F['mon_walk_left']  = G('monster_walk_left.png',  'black', _SZ_M)
+    F['mon_walk_right'] = G('monster_walk_right.png', 'black', _SZ_M)
 
     # ---- deer ----
-    F['deer_stand']          = S('deer_up-right_stand.png',  'transparent',(715,333,1448,1528), _SZ_A)
-    F['deer_walk_left']      = G('deer_walk_left.png',       'transparent', 1, 2, 2, _SZ_A)
-    F['deer_walk_leftdown']  = G('deer_walk_left-down.png',  'transparent', 1, 2, 2, _SZ_A)
-    F['deer_walk_rightdown'] = G('deer_walk_right-down.png', 'transparent', 1, 2, 2, _SZ_A)
+    F['deer_stand']          = S('deer_up-right_stand.png',  'transparent', _SZ_A)
+    F['deer_walk_left']      = G('deer_walk_left.png',       'transparent', _SZ_A)
+    F['deer_walk_leftdown']  = G('deer_walk_left-down.png',  'transparent', _SZ_A)
+    F['deer_walk_rightdown'] = G('deer_walk_right-down.png', 'transparent', _SZ_A)
 
     # ---- moose ----
-    F['moose_left']    = S('moose_left_stand.png',    'transparent',(0,263,1565,1606), _SZ_A)
-    F['moose_upleft']  = S('moose_up-left_stand.png', 'transparent',(0,312,2023,1606), _SZ_A)
-    F['moose_upright'] = S('moose_up-right_stand.png','transparent',(0,312,1487,1606), _SZ_A)
+    F['moose_left']    = S('moose_left_stand.png',    'transparent', _SZ_A)
+    F['moose_upleft']  = S('moose_up-left_stand.png', 'transparent', _SZ_A)
+    F['moose_upright'] = S('moose_up-right_stand.png','transparent', _SZ_A)
 
     # ---- rabbit ----
-    F['rabbit_stand_front'] = S('rabbit_stand_front.png','transparent',(953,229,1204,689), _SZ_R)
-    F['rabbit_stand_back']  = S('rabbit_stand_back.png', 'transparent',(953,229,1204,689), _SZ_R)
-    F['rabbit_stand_left']  = S('rabbit_stand_left.png', 'transparent',(964,320,1289,733), _SZ_R)
-    F['rabbit_stand_right'] = S('rabbit_stand_right.png','transparent',(870,320,1195,733), _SZ_R)
-    F['rabbit_walk_back']   = G('rabbit_walk_back.png',  'transparent', 1, 2, 2, _SZ_R)
-    F['rabbit_walk_front']  = G('rabbit_walk_front.png', 'transparent', 1, 2, 2, _SZ_R)
-    F['rabbit_walk_left']   = G('rabbit_walk_left.png',  'black',       3, 2, 6, _SZ_R)
-    F['rabbit_walk_right']  = G('rabbit_walk_right.png', 'black',       3, 2, 6, _SZ_R)
+    F['rabbit_stand_front'] = S('rabbit_stand_front.png','transparent', _SZ_R)
+    F['rabbit_stand_back']  = S('rabbit_stand_back.png', 'transparent', _SZ_R)
+    F['rabbit_stand_left']  = S('rabbit_stand_left.png', 'transparent', _SZ_R)
+    F['rabbit_stand_right'] = S('rabbit_stand_right.png','transparent', _SZ_R)
+    F['rabbit_walk_back']   = G('rabbit_walk_back.png',  'transparent', _SZ_R)
+    F['rabbit_walk_front']  = G('rabbit_walk_front.png', 'transparent', _SZ_R)
+    F['rabbit_walk_left']   = G('rabbit_walk_left.png',  'black',       _SZ_R)
+    F['rabbit_walk_right']  = G('rabbit_walk_right.png', 'black',       _SZ_R)
 
     # ---- food drops ----
-    F['food_deer_meat']   = S('deer_meat.png',  'transparent',(737,172,1163,481),  _SZ_I)
-    F['food_moose_meat']  = S('moose_meat.png', 'transparent',(1183,170,1886,448), _SZ_I)
-    F['food_rabbit_meat'] = S('rabbit_meat.png','transparent',(297,275,516,376),   _SZ_I)
+    F['food_deer_meat']   = S('deer_meat.png',  'transparent', _SZ_I)
+    F['food_moose_meat']  = S('moose_meat.png', 'transparent', _SZ_I)
+    F['food_rabbit_meat'] = S('rabbit_meat.png','transparent', _SZ_I)
 
     # ---- collectible items ----
-    F['item_box']     = S('box.png',    'transparent',(736,501,1361,941),  _SZ_I)
-    F['item_bullets'] = S('bullets.png','transparent',(722,427,1320,1064), _SZ_I)
-    F['item_battery'] = S('battery.png','transparent',(517,106,723,459),   _SZ_I)
-    F['item_bullet']  = S('bullet_from_gun.png','transparent',(1026,660,1217,842),(8,8))
+    F['item_box']     = S('box.png',    'transparent', _SZ_I)
+    F['item_bullets'] = S('bullets.png','transparent', _SZ_I)
+    F['item_battery'] = S('battery.png','transparent', _SZ_I)
+    F['item_bullet']  = S('bullet_from_gun.png','transparent', (8, 8))
 
     ok  = sum(1 for v in F.values() if v)
     bad = [k for k, v in F.items() if not v]
