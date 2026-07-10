@@ -50,8 +50,12 @@ SND_DEATH   = "death"
 # ---------------------------------------------------------------------------
 # Music track name constants
 # ---------------------------------------------------------------------------
-MUS_MENU    = "menu"
-MUS_TENSE   = "tense"
+# Only 3 tracks exist on disk (assets/music/): sfx_game1.ogg, slow_sker1.ogg,
+# spokoky3.ogg. MUS_MENU/MUS_TENSE previously pointed at "menu"/"tense",
+# which don't exist — MusicManager._find_file silently no-ops for a missing
+# file, so the title screen and monster-proximity stinger played nothing.
+MUS_MENU    = "spokoky3"    # title screen
+MUS_TENSE   = "sfx_game1"   # short (~10s) one-shot stinger when monster is near
 MUS_AMBIENT = ["spokoky3", "slow_sker1"]   # rotated randomly during gameplay
 
 

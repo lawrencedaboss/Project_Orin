@@ -18,8 +18,8 @@ SPRITE_DIR = os.path.join(os.getcwd(), "assets", "animations")
 
 
 # ---- display sizes (visuals only, rect/collision sizes never change) ----
-_SZ_P = (20, 20)   # player
-_SZ_M = (32, 32)   # monster
+_SZ_P = (16, 20)   # player
+_SZ_M = (24, 36)   # monster
 _SZ_A = (38, 38)   # deer / moose
 _SZ_R = (26, 26)   # rabbit
 _SZ_I = (26, 26)   # items / food

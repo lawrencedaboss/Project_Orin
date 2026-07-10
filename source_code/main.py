@@ -511,7 +511,15 @@ class Game:
             self._beep_timer = 0.0
 
         if _zone_dist is not None and _zone_dist <= 4:
-            if MUSIC.current != MUS_TENSE:
+            # MUS_TENSE is a one-shot track (loop=False): once it finishes,
+            # MUSIC.current stays set to MUS_TENSE forever (MusicManager
+            # doesn't clear it on natural stop), so `!= MUS_TENSE` never
+            # becomes true again and it never replays. Meanwhile this
+            # branch (monster still close) keeps blocking the ambient-
+            # rotation fallback below. Net effect: total silence for as
+            # long as the monster stays within 4 zones — restart the
+            # stinger whenever it's actually finished playing instead.
+            if MUSIC.current != MUS_TENSE or not MUSIC.is_playing():
                 MUSIC.play(MUS_TENSE, loop=False)
         else:
             if not MUSIC.in_rotation:
