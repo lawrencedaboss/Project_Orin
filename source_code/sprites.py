@@ -13,7 +13,7 @@ All draw functions fall back to coloured rects when files are missing.
 import os
 import pygame
 
-SPRITE_DIR = os.path.join(os.getcwd(), "assets", "animations")
+SPRITE_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets", "Animations")
 
 
 

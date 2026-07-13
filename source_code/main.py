@@ -59,7 +59,8 @@ class Game:
         pygame.mixer.pre_init(44100, -16, 1, 512)
         pygame.init()
         init_audio()
-        self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+        self.screen = pygame.display.set_mode(
+            (SCREEN_WIDTH, SCREEN_HEIGHT), pygame.RESIZABLE | pygame.SCALED)
         pygame.display.set_caption("Project Orin")
         init_sprites()   # load all spritesheets after display is created
 
@@ -335,6 +336,8 @@ class Game:
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 self._try_fire()
             if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_F11:
+                    pygame.display.toggle_fullscreen()
                 if event.key == KEYBINDS['pause']:
                     self._paused = True
                     resume = self.pause_screen.run(self.screen, self.clock)

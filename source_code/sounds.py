@@ -134,7 +134,7 @@ class MusicManager:
 
     def __init__(self):
         self._current: str | None  = None
-        self._volume: float        = 0.02
+        self._volume: float        = 0.05
         self._rotation: list[str]  = []     # track names currently rotating
         self._in_rotation: bool    = False
 
