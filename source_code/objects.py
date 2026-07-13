@@ -1,11 +1,11 @@
 import pygame
 
-from map_data import get_item_def
+from map_data import get_item_def, UNIT_W, UNIT_H, MAP_WIDTH, MAP_HEIGHT, ZONE_COUNT_X, ZONE_COUNT_Y
 from sprites import draw_item_box
 
 class Box:
-    WIDTH = 32
-    HEIGHT = 32
+    WIDTH = UNIT_W
+    HEIGHT = UNIT_H
 
     def __init__(self, x, y, loading_zone_x, loading_zone_y, item=None):
         self.x = x

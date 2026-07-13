@@ -379,8 +379,8 @@ def draw_item_box(surface, rect, item_id, collected):
         dark = spr.copy() if spr else None
         if dark:
             dark.fill((100,100,100,180), special_flags=pygame.BLEND_RGBA_MULT)
-        if not _blit(surface, dark, rect):
-            pygame.draw.rect(surface, (70,70,80), rect)
+        # if not _blit(surface, dark, rect):
+        #     pygame.draw.rect(surface, (70,70,80), rect)
         pygame.draw.rect(surface, (255,255,255), rect, 2)
         return
     if not _blit(surface, spr, rect):
