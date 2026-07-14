@@ -8,10 +8,10 @@ from monster import Monster
 from animals import Animal
 from objects import Box
 from title_screen import TitleScreen
-from config import (SCREEN_WIDTH, SCREEN_HEIGHT, MAP_WIDTH, MAP_HEIGHT, 
+from config import (SCREEN_WIDTH, SCREEN_HEIGHT, MAP_WIDTH, MAP_HEIGHT,
                     MAP_LEFT, MAP_TOP, ZONE_COUNT_X, ZONE_COUNT_Y, FPS,
                     ANIMAL_COUNT, RADIATION_RATE, FOOD_HUNGER_RESTORE, KEYBINDS)
-from sounds import SFX, MUSIC, init_audio, SND_COLLECT, SND_HIDE, SND_UNHIDE, SND_BEEP, SND_DEATH, MUS_MENU, MUS_AMBIENT, MUS_TENSE
+from sounds import SFX, MUSIC, init_audio, SND_COLLECT, SND_HIDE, SND_UNHIDE, SND_DEATH, MUS_MENU, MUS_AMBIENT, MUS_TENSE
 from map_data import (get_zone_type, get_items_in_zone,
                       get_zone_grid, get_zone_radiation,
                       TILE_EMPTY, TILE_WALL, TILE_OBJECT, UNIT_W, UNIT_H,
@@ -22,8 +22,9 @@ from bullets import Bullet
 from food import Food
 from inventory_screen import InventoryScreen
 from pause_screen import PauseScreen
- 
- 
+from display_scale import present, real_to_logical_pos
+
+
 
 # ---------------------------------------------------------------------------
 # Game Over screen
@@ -47,7 +48,7 @@ class GameOverScreen:
            screen.fill((0, 0, 0))
            screen.blit(self.title_surface, (340, 220))
            screen.blit(self.prompt_surface, (350, 300))
-           pygame.display.flip()
+           present(screen)
 
 
 # ---------------------------------------------------------------------------
@@ -58,8 +59,13 @@ class Game:
         pygame.mixer.pre_init(44100, -16, 1, 512)
         pygame.init()
         init_audio()
-        self.screen = pygame.display.set_mode(
-            (SCREEN_WIDTH, SCREEN_HEIGHT), pygame.RESIZABLE | pygame.SCALED)
+        # self.screen is a fixed-resolution logical surface — all drawing
+        # targets it. The real OS window (created below) is free to resize
+        # or go fullscreen; present() scales self.screen onto it each frame
+        # with pygame.transform.scale(), which (unlike SCALED's SDL-renderer
+        # path) reliably stays crisp/nearest instead of blurring.
+        self.screen = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
+        pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.RESIZABLE)
         pygame.display.set_caption("Project Orin")
         init_sprites()   # load all spritesheets after display is created
 
@@ -145,13 +151,24 @@ class Game:
             buf.append(int(32767 * val))
         return pygame.mixer.Sound(buffer=buf)
 
+    # ---- display ----
+
+    def _toggle_fullscreen(self):
+        # Calling set_mode() again here (e.g. to pass a different flag)
+        # reliably crashes with "failed to create renderer" on the
+        # fullscreen->windowed leg. toggle_fullscreen() resizes the real
+        # window in place instead — self.screen (our fixed logical
+        # surface) is untouched, present() just scales it to whatever
+        # size the window ends up at.
+        pygame.display.toggle_fullscreen()
+
     # ---- firing ----
 
     def _try_fire(self):
         if pygame.mouse.get_pressed()[0] and not self.player.hiding:
             if self.player.ammo <= 0:
                 return
-            mx, my = pygame.mouse.get_pos()
+            mx, my = real_to_logical_pos(pygame.mouse.get_pos(), (SCREEN_WIDTH, SCREEN_HEIGHT))
             mx -= MAP_LEFT
             my -= MAP_TOP
             px, py = self.player.rect.center
@@ -159,6 +176,7 @@ class Game:
             dy = my - py
             self.bullets.fire(px, py, dx, dy, self.player.loadingzonex, self.player.loadingzoney)
             self.player.ammo -= 1
+            self.player.trigger_shoot()
 
     # ---- AI thread ----
 
@@ -335,8 +353,8 @@ class Game:
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 self._try_fire()
             if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_F11:
-                    pygame.display.toggle_fullscreen()
+                if event.key == pygame.K_F11 or event.key == KEYBINDS['fullscreen']:
+                    self._toggle_fullscreen()
                 if event.key == KEYBINDS['pause']:
                     self._paused = True
                     resume = self.pause_screen.run(self.screen, self.clock)
@@ -360,7 +378,7 @@ class Game:
     # ---- update ----
 
     def update(self, dt):
-        MUSIC.update()
+        MUSIC.update(dt)
         _zone_dist  = None
         _pixel_dist = None
 
@@ -504,10 +522,12 @@ class Game:
         if self._beep_interval is not None:
             self._beep_timer -= dt
             if self._beep_timer <= 0:
-                if SND_BEEP not in SFX.loaded():
-                    self._beep_sound.play()
-                else:
-                    SFX.play(SND_BEEP)
+                # assets/sounds/beep.wav is actually a ~10s drone, not a
+                # discrete blip — retriggering it every 0.12-2.5s stacks
+                # overlapping tails into one continuous drone regardless of
+                # interval. Use the synthesized short tone instead so the
+                # escalation is actually audible as speeding-up beeps.
+                self._beep_sound.play()
                 self._beep_timer = self._beep_interval
         elif not self._droning:
             self._beep_timer = 0.0
@@ -638,7 +658,7 @@ class Game:
             pygame.draw.rect(self.screen, (50, 100, 50), hiding_rect.inflate(20, 10))
             self.screen.blit(hiding_surface, hiding_rect.topleft)
 
-        pygame.display.flip()
+        present(self.screen)
 
     # ---- run ----
 
@@ -657,12 +677,24 @@ class Game:
         self._ai_thread = threading.Thread(target=self._ai_loop, daemon=True, name='AI-Thread')
         self._ai_thread.start()
 
+        # Fixed-timestep simulation, uncapped/fluid rendering: update(dt)
+        # (player, bullets, hunger, radiation…) always advances in fixed
+        # FIXED_DT steps — same gameplay feel and balance no matter how
+        # fast or slow frames render — while render() itself runs once per
+        # real frame at whatever rate the display/CPU can sustain, instead
+        # of being locked to the same 100Hz cap as the simulation.
+        FIXED_DT = 1.0 / FPS
+        accumulator = 0.0
+
         self.running = True
         while self.running:
-            dt = self.clock.tick(100) / 1000.0
-            self._last_dt = dt
+            frame_time = min(self.clock.tick(240) / 1000.0, 0.25)  # clamp avoids catch-up spiral after a stall
+            accumulator += frame_time
             self.handle_events()
-            self.update(dt)
+            while accumulator >= FIXED_DT:
+                self.update(FIXED_DT)
+                accumulator -= FIXED_DT
+            self._last_dt = FIXED_DT
             self.render()
 
 

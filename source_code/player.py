@@ -42,7 +42,8 @@ class Player:
         # sprite animation state
         self._anim_t  = 0.0   # accumulated time for walk cycle
         self._last_dx = 0.0
-        self._last_dy = 1.0   # default face-forward"""
+        self._last_dy = 1.0   # default face-forward
+        self._shoot_timer = 0.0   # counts down while the gun-hold pose is shown
 
     # ------------------------------------------------------------------
     # Properties derived from equipped items
@@ -70,11 +71,18 @@ class Player:
         drain = self.hunger_rate * (2 if moving else 1) * dt
         self.hunger = max(0, self.hunger - drain)
 
+        if self._shoot_timer > 0:
+            self._shoot_timer = max(0.0, self._shoot_timer - dt)
+
         # Slow down as hunger falls below 50
         if self.hunger <= 50:
             self.speed = PLAYER_BASE_SPEED - HUNGER_SPEED_MULTIPLIER * (50 - self.hunger)
         else:
             self.speed = PLAYER_BASE_SPEED
+
+    def trigger_shoot(self, hold_seconds=0.35):
+        """Show the gun-hold pose for a brief moment after firing."""
+        self._shoot_timer = hold_seconds
 
     def eat(self, nutrition):
         self.hunger = min(100, self.hunger + nutrition)
@@ -238,7 +246,7 @@ class Player:
             if moving:
                 self._anim_t += dt
             has_suit = self.equipment.get('body') is not None
-            has_gun  = self.ammo > 0
+            has_gun  = self._shoot_timer > 0
             draw_player(screen, self.rect,
                         self._last_dx, self._last_dy,
                         moving, has_gun, has_suit, self._anim_t)

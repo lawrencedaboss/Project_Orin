@@ -56,10 +56,26 @@ RESPAWN_TIME_MAX      = 30
 
 ALERT_ZONE_DIST   = 20     # real path-hop radius (see DESPAWN_ZONE_DISTANCE
                             # comment above) at which the monster enters
-                            # ALERT and starts routing toward the player;
-                            # kept below LEAVE_ZONE_DISTANCE so it commits
-                            # to a real chase before the leave timer could
-                            # ever start counting down
+                            # ALERT and starts routing toward the player.
+                            # Must stay >= the typical spawn distance
+                            # (_spawn_near_player targets <= LEAVE_ZONE_DISTANCE-2
+                            # = 16 hops) — dropping this below ~16 leaves a gap
+                            # where a monster can spawn *outside* ALERT range
+                            # and then wander PATROL forever (undirected, so it
+                            # essentially never closes a 14-16 hop maze gap by
+                            # chance), never engaging and therefore never
+                            # reaching the engagement-timeout leave check below
+                            # either. Verified via simulation: at ALERT_ZONE_DIST
+                            # =14 the monster got permanently stuck in PATROL.
+
+# _spawn_near_player always picks a candidate within (LEAVE_ZONE_DISTANCE-2)
+# hops when one exists, and ALERT/CHASE then actively close the distance —
+# so path_dist essentially never lingers at/above LEAVE_ZONE_DISTANCE once
+# a chase is underway, and the distance-based leave check below almost
+# never fires. This timeout forces a disengage after a while regardless of
+# distance, so the monster periodically backs off instead of hunting forever.
+ENGAGE_TIMEOUT_MIN = 30.0
+ENGAGE_TIMEOUT_MAX = 45.0
 CHASE_SPEED_MAX   = 1.5   # top speed multiplier during a chase
 CHASE_SPEED_RATE  = 0.15   # how fast the multiplier climbs per second
 SEARCH_DURATION   = 7.0    # seconds to sweep last-known area before giving up
@@ -236,6 +252,9 @@ class Monster:
 
         self._leaving     = False
         self._leave_timer = 0.0
+
+        self._engage_timer   = 0.0
+        self._engage_timeout = random.uniform(ENGAGE_TIMEOUT_MIN, ENGAGE_TIMEOUT_MAX)
 
         self._wander_vx    = 1.0
         self._wander_vy    = 0.0
@@ -748,6 +767,7 @@ class Monster:
         self.active        = False
         self._leaving      = False
         self._leave_timer  = 0.0
+        self._engage_timer = 0.0
         self._door_seek    = None
         self._route_hops   = None
         self._state        = STATE_PATROL
@@ -808,6 +828,8 @@ class Monster:
         self.active        = True
         self._leaving      = False
         self._leave_timer  = 0.0
+        self._engage_timer   = 0.0
+        self._engage_timeout = random.uniform(ENGAGE_TIMEOUT_MIN, ENGAGE_TIMEOUT_MAX)
         self._door_seek    = None
         self._route_hops   = None
         self._state        = STATE_PATROL
@@ -871,6 +893,16 @@ class Monster:
                     self._leaving = True
             else:
                 self._leave_timer = 0.0
+
+            # Give up after prolonged engagement regardless of distance —
+            # see ENGAGE_TIMEOUT_MIN/MAX comment above. Counts total time
+            # since spawn, NOT gated on state != PATROL: hiding forces
+            # state back to PATROL every frame (see hiding branch below),
+            # so gating on state let a player who hides periodically reset
+            # this to 0 indefinitely and the monster would never leave.
+            self._engage_timer += dt
+            if self._engage_timer >= self._engage_timeout:
+                self._leaving = True
 
         if self._leaving:
             self._move_flee_world_edge(dt)

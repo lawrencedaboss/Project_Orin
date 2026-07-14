@@ -1,5 +1,7 @@
 import pygame
 from config import (SCREEN_WIDTH, SCREEN_HEIGHT, KEYBINDS)
+from sounds import MUSIC
+from display_scale import present
 
 class PauseScreen:
    def __init__(self):
@@ -45,7 +47,7 @@ class PauseScreen:
                screen.blit(surface, (panel_rect.left + 30, panel_rect.top + 70 + i * 30))
            hint = self.small_font.render("Arrow keys: navigate | Enter: rebind | Esc: back", True, (150, 150, 150))
            screen.blit(hint, (panel_rect.centerx - hint.get_width() / 2, panel_rect.bottom - 40))
-           pygame.display.flip()
+           present(screen)
 
    def _save_keybind(self, action, key):
        import json
@@ -75,11 +77,12 @@ class PauseScreen:
            overlay.fill((15, 20, 45, 190))
            screen.blit(overlay, (0, 0))
            screen.blit(prompt, (SCREEN_WIDTH // 2 - prompt.get_width() // 2, SCREEN_HEIGHT // 2 - 50))
-           pygame.display.flip()
+           present(screen)
 
    def run(self, screen, clock):
        while True:
-           clock.tick(60)
+           dt = clock.tick(60) / 1000.0
+           MUSIC.update(dt)
            for event in pygame.event.get():
                if event.type == pygame.QUIT:
                    return False
@@ -103,4 +106,4 @@ class PauseScreen:
            screen.blit(self.resume_surface, (panel_rect.left + 40, panel_rect.top + 120))
            screen.blit(self.quit_surface, (panel_rect.left + 40, panel_rect.top + 160))
            screen.blit(self.keybind_surface, (panel_rect.left + 40, panel_rect.top + 200))
-           pygame.display.flip()
+           present(screen)

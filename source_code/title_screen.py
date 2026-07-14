@@ -1,4 +1,6 @@
 import pygame
+from sounds import MUSIC
+from display_scale import present
 
 
 
@@ -24,7 +26,8 @@ class TitleScreen:
        Returns True if the game should start, False if the window was closed.
        """
        while True:
-           clock.tick(60)
+           dt = clock.tick(60) / 1000.0
+           MUSIC.update(dt)
            for event in pygame.event.get():
                if event.type == pygame.QUIT:
                    return False
@@ -45,8 +48,7 @@ class TitleScreen:
            screen.blit(self.prompt_surface, (width // 2 - self.prompt_surface.get_width() // 2, 400))
            screen.blit(self.tip_surface, (width // 2 - self.tip_surface.get_width() // 2, 500))
 
-           pygame.display.flip()
-
+           present(screen)
 
 
 

@@ -1,6 +1,8 @@
 import pygame
 from config import (SCREEN_WIDTH, SCREEN_HEIGHT, KEYBINDS)
 from map_data import (get_item_def)
+from sounds import MUSIC
+from display_scale import present
 # ---------------------------------------------------------------------------
 # Inventory screen — three tabs: Objects | Items | Equipment
 # ---------------------------------------------------------------------------
@@ -33,6 +35,21 @@ class InventoryScreen:
         px = (SCREEN_WIDTH  - pw) // 2
         py = (SCREEN_HEIGHT - ph) // 2
         return pygame.Rect(px, py, pw, ph)
+
+    @staticmethod
+    def _ordered_items(player):
+        """Consumables first, then equippables. Both the Items-tab renderer
+        and the Enter/U action must index into this exact same ordering —
+        they used to compute it separately (one used raw player.inventory
+        order), so the cursor position (drawn against this order) and the
+        item actually used (looked up in the other order) could point at
+        different items whenever an equippable wasn't already last in
+        player.inventory."""
+        consumables = [iid for iid in player.inventory
+                       if not get_item_def(iid).get('equippable')]
+        equippables = [iid for iid in player.inventory
+                       if get_item_def(iid).get('equippable')]
+        return consumables + equippables
 
     def _draw_bar(self, screen, x, y, w, h, value, max_value, fill_color):
         pct = max(0.0, min(1.0, value / max_value))
@@ -104,12 +121,7 @@ class InventoryScreen:
         x = panel.left + 24
         y = content_top
 
-        # Separate consumables from equippables
-        consumables  = [iid for iid in player.inventory
-                        if not get_item_def(iid).get('equippable')]
-        equippables  = [iid for iid in player.inventory
-                        if get_item_def(iid).get('equippable')]
-        all_items    = consumables + equippables
+        all_items = self._ordered_items(player)
 
         if not all_items:
             empty = self.text_font.render("No items in inventory.", True, (160, 160, 160))
@@ -221,10 +233,11 @@ class InventoryScreen:
 
     def run(self, screen, clock, player, boxes):
         """Blocks until player closes inventory. Returns False only if game should quit."""
-        all_items = lambda: [iid for iid in player.inventory]
+        all_items = lambda: self._ordered_items(player)
 
         while True:
-            clock.tick(60)
+            dt = clock.tick(60) / 1000.0
+            MUSIC.update(dt)
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     return False
@@ -287,4 +300,4 @@ class InventoryScreen:
             nav_hint = self.small_font.render("◄ Q / E ►  switch tabs", True, (90, 100, 140))
             screen.blit(nav_hint, (panel.right - nav_hint.get_width() - 10, panel.top - 20))
 
-            pygame.display.flip()
+            present(screen)

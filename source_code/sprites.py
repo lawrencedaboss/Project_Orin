@@ -110,16 +110,36 @@ def _merge_close_rects(rects, gap):
     return rects
 
 
-def _content_rects(img, min_frac=0.12):
+def _content_rects(img, min_frac=0.12, max_canvas_frac=0.6):
     """Return the significant content blobs on a sheet (colourkey/alpha
     already applied to `img`), largest-relative noise filtered out."""
     iw, ih = img.get_size()
-    mask  = pygame.mask.from_surface(img, threshold=30)
+    colorkey = img.get_colorkey()
+    if colorkey is not None:
+        # pygame.mask.from_surface doesn't reliably honor an explicit
+        # colorkey on a surface without per-pixel alpha — empirically it
+        # reports ~100% of the canvas as opaque regardless of how much is
+        # actually the colorkeyed background, which collapsed every
+        # black-background walk sheet to one bogus frame spanning the
+        # whole image. from_threshold does an explicit color-distance
+        # comparison instead, so it isn't subject to that quirk.
+        mask = pygame.mask.from_threshold(img, colorkey, threshold=(30, 30, 30, 255))
+        mask.invert()
+    else:
+        mask = pygame.mask.from_surface(img, threshold=30)
     rects = mask.get_bounding_rects()
     if not rects:
         return []
     gap   = max(15, int(min(iw, ih) * 0.01))
     rects = _merge_close_rects(rects, gap)
+    canvas_area = iw * ih
+    # Defense in depth: a blob spanning most of the canvas is background
+    # noise, not a frame — reject it before it can hijack the relative
+    # min_frac filter below (an oversized bogus "max" blob would otherwise
+    # make every real, smaller frame look like noise by comparison).
+    rects = [r for r in rects if r.w * r.h <= canvas_area * max_canvas_frac]
+    if not rects:
+        return []
     max_area = max(r.w * r.h for r in rects)
     return [r for r in rects if r.w * r.h >= max_area * min_frac]
 
@@ -309,8 +329,13 @@ def draw_player(surface, rect, dx, dy, moving, has_gun, has_suit, anim_t):
         pygame.draw.rect(surface, (0, 200, 0), rect); return
     d   = _dir(dx, dy)
     pfx = 'suit' if has_suit else ('p_gun' if has_gun else 'p')
+    # No dedicated no-gun "stand" art exists (only *_gun_stand_* / suit_stand_*),
+    # so fall back to the first frame of that direction's walk cycle before
+    # the last-resort front-facing gun pose — keeps the idle pose facing the
+    # right way instead of always showing the gun-holding front sprite.
     spr = (_anim(f'{pfx}_walk_{d}', anim_t) if moving else None) \
           or _get(f'{pfx}_stand_{d}') \
+          or _get(f'{pfx}_walk_{d}') \
           or _get('p_gun_stand_front')
     if not _blit(surface, spr, rect):
         pygame.draw.rect(surface, (0, 200, 0), rect)
@@ -354,7 +379,6 @@ def draw_animal(surface, rect, animal_type, dx, dy, moving, anim_t):
                or _get(smap.get(d,'rabbit_stand_front'))
     if not _blit(surface, spr, rect):
         pygame.draw.rect(surface, (125,100,10), rect)
-
 
 _FOOD_KEYS = {
     'deer_meat':   'food_deer_meat',
