@@ -32,7 +32,7 @@ class PauseScreen:
            overlay.fill((15, 20, 45, 190))
            screen.blit(overlay, (0, 0))
            panel = pygame.Surface((400, 350), pygame.SRCALPHA)
-           panel.fill((30, 40, 80, 220))
+           panel.fill((30, 40, 80, 250))
            panel_rect = panel.get_rect(center=(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2))
            screen.blit(panel, panel_rect)
            title = self.text_font.render("KEYBINDS", True, (255, 255, 255))
