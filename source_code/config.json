@@ -28,7 +28,7 @@
     "animal_wander_interval_min": 5,
     "animal_wander_interval_max": 10,
     "player_base_speed": 500,
-    "hunger_rate": 1.25,
+    "hunger_rate": 1.1,
     "hunger_speed_multiplier": 7.5,
     "radiation_rate": 25,
     "radiation_max": 100,

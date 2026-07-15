@@ -110,6 +110,7 @@ class Game:
         self.bullets = BulletsManager()
         self.last_mouse_pressed = False
         self.last_shoot_pressed = False
+        self._map_open = False
 
         self.running = False
 
@@ -357,10 +358,14 @@ class Game:
                 if event.key == pygame.K_F11 or event.key == KEYBINDS['fullscreen']:
                     self._toggle_fullscreen()
                 if event.key == KEYBINDS['map']:
-                    self._paused = True
-                    self._run_map_screen()
-                    self._paused = False
-                    self.clock.tick()  # discard accumulated time
+                    if not self._map_open and not self._paused:
+                        self._paused = True
+                        self._run_map_screen()
+                        self._map_open = True
+                        self._paused = False
+                        self.clock.tick()  # discard accumulated time
+                    elif self._map_open:
+                        self._map_open = False
                 if event.key == KEYBINDS['pause']:
                     self._paused = True
                     resume = self.pause_screen.run(self.screen, self.clock)
@@ -668,7 +673,7 @@ class Game:
             self.screen.blit(hiding_surface, hiding_rect.topleft)
 
         if self._map_open:
-            self._draw_minimap()
+            self._draw_map_screen()
 
         present(self.screen)
 
@@ -761,6 +766,12 @@ class Game:
             f"Yellow dots: boxes  |  {pygame.key.name(KEYBINDS['map']).upper()} / ESC: close",
             True, (150, 150, 165))
         self.screen.blit(hint, (SCREEN_WIDTH // 2 - hint.get_width() // 2, SCREEN_HEIGHT - 34))
+        
+        for event in pygame.event.get():
+            if event.type == pygame.KEYDOWN and event.key in (KEYBINDS['map'], pygame.K_ESCAPE):
+                self._map_open = False
+
+
 
     # ---- run ----
 
