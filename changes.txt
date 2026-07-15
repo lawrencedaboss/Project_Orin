@@ -1,0 +1,1 @@
+map fragments do work, more spread out items, map fragments to make a small map on bottom right corner of screen when in known places and marks things like boxes. Move rad suit to its own category on the third tab. Make different types of animals. Delete first tab of inventory. Allow clicking on inventory tabs. Add varied animals.

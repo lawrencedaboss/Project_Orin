@@ -4,18 +4,16 @@ from map_data import (get_item_def)
 from sounds import MUSIC
 from display_scale import present
 # ---------------------------------------------------------------------------
-# Inventory screen — three tabs: Objects | Items | Equipment
+# Inventory screen — two tabs: Items | Equipment
 # ---------------------------------------------------------------------------
 class InventoryScreen:
     """
-    Tab 0: Objects   — collected boxes / progress
-    Tab 1: Items     — consumables in inventory, pick & use individually
-    Tab 2: Equipment — equippable items (rad suit etc.)
+    Tab 0: Items     — consumables in inventory, pick & use individually
+    Tab 1: Equipment — equippable items (rad suit etc.)
     """
 
-    TABS = ["OBJECTS", "ITEMS", "EQUIPMENT"]
+    TABS = ["ITEMS", "EQUIPMENT"]
     TAB_COLORS = {
-        "OBJECTS":   (80, 180, 80),
         "ITEMS":     (80, 140, 220),
         "EQUIPMENT": (200, 130, 50),
     }
@@ -57,19 +55,21 @@ class InventoryScreen:
         pygame.draw.rect(screen, fill_color,   (x, y, int(w * pct), h))
         pygame.draw.rect(screen, (180, 180, 180), (x, y, w, h), 1)
 
-    def _draw_tabs(self, screen, panel):
+    def _tab_rect(self, panel, index):
         tab_w = panel.width // len(self.TABS)
+        return pygame.Rect(panel.left + index * tab_w, panel.top, tab_w, 36)
+
+    def _draw_tabs(self, screen, panel):
         for i, name in enumerate(self.TABS):
-            tx = panel.left + i * tab_w
-            ty = panel.top
+            r = self._tab_rect(panel, i)
             active = (i == self._tab)
             bg = (30, 45, 90) if active else (20, 28, 60)
-            pygame.draw.rect(screen, bg, (tx, ty, tab_w, 36))
+            pygame.draw.rect(screen, bg, r)
             border_color = self.TAB_COLORS[name] if active else (60, 70, 100)
-            pygame.draw.rect(screen, border_color, (tx, ty, tab_w, 36), 2 if active else 1)
+            pygame.draw.rect(screen, border_color, r, 2 if active else 1)
             label = self.tab_font.render(name, True,
                                          self.TAB_COLORS[name] if active else (140, 140, 160))
-            screen.blit(label, (tx + (tab_w - label.get_width()) // 2, ty + 8))
+            screen.blit(label, (r.x + (r.width - label.get_width()) // 2, r.y + 8))
 
     def _draw_status_bars(self, screen, player, x, y):
         """Render hunger + radiation bars at (x, y); returns new y."""
@@ -95,27 +95,6 @@ class InventoryScreen:
         return y + 36
 
     # ---- tab renderers ----
-
-    def _draw_tab_objects(self, screen, player, boxes, panel, content_top):
-        x = panel.left + 24
-        y = content_top
-
-        header = self.text_font.render(
-            f"Objects Collected: {player.collected_objects}/{len(boxes)}", True, (150, 255, 150))
-        screen.blit(header, (x, y));  y += 36
-
-        for i, box in enumerate(boxes, 1):
-            status = "✓ Collected" if box.collected else "○ Not found"
-            color  = (150, 255, 150) if box.collected else (120, 120, 130)
-            label  = self.small_font.render(f"  Box {i}: {status}", True, color)
-            screen.blit(label, (x + 20, y));  y += 26
-            if y > panel.bottom - 60:
-                more = self.small_font.render("  … (scroll not yet implemented)", True, (100, 100, 100))
-                screen.blit(more, (x + 20, y))
-                break
-
-        y = panel.bottom - 52
-        y = self._draw_status_bars(screen, player, x, y - 70)
 
     def _draw_tab_items(self, screen, player, panel, content_top):
         x = panel.left + 24
@@ -183,33 +162,38 @@ class InventoryScreen:
         x = panel.left + 24
         y = content_top
 
-        slots = {
-            'body': 'Body Armour / Suit',
+        # Each equipment slot gets its own labeled category section (rather
+        # than one generic "Body Armour / Suit" catch-all) so distinct gear
+        # types are visually separated — currently just Radiation Suits,
+        # but new slots/categories can be added to this dict later.
+        categories = {
+            'body': 'RADIATION SUITS',
         }
-        for slot, label in slots.items():
+        for slot, category_label in categories.items():
+            cat = self.small_font.render(category_label, True, (140, 160, 200))
+            screen.blit(cat, (x + 10, y))
+            y += 22
+
             equipped = player.equipment.get(slot)
             # Slot box
             slot_rect = pygame.Rect(x + 10, y, panel.width - 48, 68)
             pygame.draw.rect(screen, (28, 38, 70), slot_rect)
             pygame.draw.rect(screen, (70, 90, 130), slot_rect, 2)
 
-            sl = self.text_font.render(label, True, (160, 180, 220))
-            screen.blit(sl, (x + 20, y + 6))
-
             if equipped:
                 item_def = get_item_def(equipped)
                 name  = item_def.get('name', equipped)
                 desc  = item_def.get('description', '')
                 nc = self.text_font.render(name, True, (200, 130, 50))
-                screen.blit(nc, (x + 20, y + 28))
+                screen.blit(nc, (x + 20, y + 10))
                 dc = self.small_font.render(desc, True, (150, 160, 190))
-                screen.blit(dc, (x + 20, y + 50))
+                screen.blit(dc, (x + 20, y + 34))
                 # Unequip hint
                 uh = self.small_font.render("[R] unequip", True, (180, 100, 80))
-                screen.blit(uh, (slot_rect.right - uh.get_width() - 10, y + 6))
+                screen.blit(uh, (slot_rect.right - uh.get_width() - 10, y + 10))
             else:
                 empty_t = self.small_font.render("— empty —", True, (80, 90, 110))
-                screen.blit(empty_t, (x + 20, y + 30))
+                screen.blit(empty_t, (x + 20, y + 26))
 
             y += 80
 
@@ -231,7 +215,7 @@ class InventoryScreen:
 
     # ---- main run loop ----
 
-    def run(self, screen, clock, player, boxes):
+    def run(self, screen, clock, player):
         """Blocks until player closes inventory. Returns False only if game should quit."""
         all_items = lambda: self._ordered_items(player)
 
@@ -241,6 +225,14 @@ class InventoryScreen:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     return False
+
+                if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                    panel = self._panel_rect()
+                    for i in range(len(self.TABS)):
+                        if self._tab_rect(panel, i).collidepoint(event.pos):
+                            self._tab = i
+                            self._item_cursor = 0
+                            break
 
                 if event.type == pygame.KEYDOWN:
                     # --- close ---
@@ -256,7 +248,7 @@ class InventoryScreen:
                         self._item_cursor = 0
 
                     # --- Items tab controls ---
-                    if self._tab == 1:
+                    if self._tab == 0:
                         items = all_items()
                         if event.key == pygame.K_UP:
                             self._item_cursor = max(0, self._item_cursor - 1)
@@ -270,7 +262,7 @@ class InventoryScreen:
                             self._item_cursor = max(0, self._item_cursor)
 
                     # --- Equipment tab controls ---
-                    if self._tab == 2:
+                    if self._tab == 1:
                         if event.key == pygame.K_r:
                             player.unequip_slot('body')
 
@@ -290,10 +282,8 @@ class InventoryScreen:
             content_top = panel.top + 50
 
             if self._tab == 0:
-                self._draw_tab_objects(screen, player, boxes, panel, content_top)
-            elif self._tab == 1:
                 self._draw_tab_items(screen, player, panel, content_top)
-            elif self._tab == 2:
+            elif self._tab == 1:
                 self._draw_tab_equipment(screen, player, panel, content_top)
 
             # Tab navigation hint at top right

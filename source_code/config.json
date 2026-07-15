@@ -17,8 +17,9 @@
     "move_down": "down",
     "move_left": "left",
     "move_right": "right",
-    "shoot":"q",
-    "fullscreen": "f"
+    "shoot": "q",
+    "fullscreen": "f",
+    "map": "m"
   },
   "balance": {
     "monster_speed": 100,

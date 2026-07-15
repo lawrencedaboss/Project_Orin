@@ -1,5 +1,5 @@
 import pygame
-from config import (SCREEN_WIDTH, SCREEN_HEIGHT, KEYBINDS)
+from config import (SCREEN_WIDTH, SCREEN_HEIGHT, KEYBINDS, CONFIG_PATH)
 from sounds import MUSIC
 from display_scale import present
 
@@ -14,8 +14,15 @@ class PauseScreen:
        self.keybind_surface = self.text_font.render("k: keybinds", True, (220, 220, 220))
 
    def show_keybind_menu(self, screen, clock):
-       actions = ['pause', 'hide', 'action', 'inventory', 'move_up', 'move_down', 'move_left', 'move_right', 'exit']
+       # Derived from KEYBINDS itself (not a hand-maintained list) so a
+       # newly added keybind always shows up here automatically instead of
+       # silently being unrebindable through the UI.
+       actions = list(KEYBINDS.keys())
        selected = 0
+       row_h = 26
+       top_offset = 70
+       bottom_margin = 50
+       panel_h = top_offset + len(actions) * row_h + bottom_margin
        while True:
            clock.tick(60)
            for event in pygame.event.get():
@@ -33,7 +40,7 @@ class PauseScreen:
            overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
            overlay.fill((15, 20, 45, 190))
            screen.blit(overlay, (0, 0))
-           panel = pygame.Surface((400, 350), pygame.SRCALPHA)
+           panel = pygame.Surface((400, panel_h), pygame.SRCALPHA)
            panel.fill((30, 40, 80, 250))
            panel_rect = panel.get_rect(center=(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2))
            screen.blit(panel, panel_rect)
@@ -44,7 +51,7 @@ class PauseScreen:
                text = f"{action}: {key_name}"
                color = (255, 200, 100) if i == selected else (200, 200, 200)
                surface = self.small_font.render(text, True, color)
-               screen.blit(surface, (panel_rect.left + 30, panel_rect.top + 70 + i * 30))
+               screen.blit(surface, (panel_rect.left + 30, panel_rect.top + top_offset + i * row_h))
            hint = self.small_font.render("Arrow keys: navigate | Enter: rebind | Esc: back", True, (150, 150, 150))
            screen.blit(hint, (panel_rect.centerx - hint.get_width() / 2, panel_rect.bottom - 40))
            present(screen)
@@ -52,11 +59,11 @@ class PauseScreen:
    def _save_keybind(self, action, key):
        import json
        try:
-           with open('config.json', 'r') as f:
+           with open(CONFIG_PATH, 'r') as f:
                config = json.load(f)
            key_name = pygame.key.name(key).lower()
            config['keybinds'][action] = key_name
-           with open('config.json', 'w') as f:
+           with open(CONFIG_PATH, 'w') as f:
                json.dump(config, f, indent=2)
        except:
            pass

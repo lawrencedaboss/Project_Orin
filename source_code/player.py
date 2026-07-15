@@ -45,6 +45,10 @@ class Player:
         self._last_dy = 1.0   # default face-forward
         self._shoot_timer = 0.0   # counts down while the gun-hold pose is shown
 
+        # Minimap: zones the player has physically visited or revealed via
+        # a map_fragment's reveal_radius effect.
+        self.known_zones = {(self.loadingzonex, self.loadingzoney)}
+
     # ------------------------------------------------------------------
     # Properties derived from equipped items
     # ------------------------------------------------------------------
@@ -144,9 +148,22 @@ class Player:
             self.radiation = max(0, self.radiation + effect['radiation'])
         if 'ammo' in effect:
             self.ammo = min(self.ammo + effect['ammo'], 99)
+        if 'reveal_radius' in effect:
+            self.reveal_zones_around(effect['reveal_radius'])
 
         self.inventory.remove(target_id)
         return True
+
+    def reveal_zones_around(self, radius):
+        """Add every zone within `radius` (Chebyshev distance) of the
+        player's current zone to known_zones — used by map_fragment."""
+        cx, cy = self.loadingzonex, self.loadingzoney
+        r = int(radius)
+        for dy in range(-r, r + 1):
+            for dx in range(-r, r + 1):
+                zx, zy = cx + dx, cy + dy
+                if 0 <= zx < self.zone_count_x and 0 <= zy < self.zone_count_y:
+                    self.known_zones.add((zx, zy))
 
     # ------------------------------------------------------------------
     # Hiding
@@ -232,6 +249,7 @@ class Player:
 
         self.rect.x = int(self.x)
         self.rect.y = int(self.y)
+        self.known_zones.add((self.loadingzonex, self.loadingzoney))
 
     # ------------------------------------------------------------------
     # Draw

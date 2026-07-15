@@ -5,11 +5,20 @@ from config import ANIMAL_SPEED, ANIMAL_WANDER_INTERVAL_MIN, ANIMAL_WANDER_INTER
 from map_data import get_zone_grid, TILE_WALL
 from sprites import draw_animal, ANIMAL_DEER, ANIMAL_MOOSE, ANIMAL_RABBIT
 
+# Relative to ANIMAL_SPEED — gives the different types a bit of behavioural
+# identity to go with their distinct sprites, instead of only differing
+# visually.
+_SPEED_MULT = {
+    ANIMAL_DEER:   1.0,
+    ANIMAL_MOOSE:  0.7,   # bulkier, slower
+    ANIMAL_RABBIT: 1.4,   # skittish, faster
+}
+
 
 class Animal:
     def __init__(self, loading_zone_x, loading_zone_y,
                  screen_width=800, screen_height=600,
-                 zone_count_x=20, zone_count_y=20):
+                 zone_count_x=20, zone_count_y=20, animal_type=None):
         self.screen_width  = screen_width
         self.screen_height = screen_height
         self.zone_count_x  = zone_count_x
@@ -36,7 +45,9 @@ class Animal:
         self._dir_y = 0.0
         # sprite state
         self._anim_t    = 0.0
-        self.animal_type = ANIMAL_DEER   # subclasses / spawn code can override
+        self.animal_type = animal_type or random.choice(
+            [ANIMAL_DEER, ANIMAL_MOOSE, ANIMAL_RABBIT])
+        self.speed *= _SPEED_MULT.get(self.animal_type, 1.0)
 
 
     # ------------------------------------------------------------------

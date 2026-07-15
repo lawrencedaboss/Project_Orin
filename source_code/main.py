@@ -101,6 +101,7 @@ class Game:
             ]
 
         self.font = pygame.font.SysFont('Arial', 20)
+        self.small_font = pygame.font.SysFont('Arial', 16)
 
         self.title_screen     = TitleScreen()
         self.pause_screen     = PauseScreen()
@@ -355,6 +356,11 @@ class Game:
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_F11 or event.key == KEYBINDS['fullscreen']:
                     self._toggle_fullscreen()
+                if event.key == KEYBINDS['map']:
+                    self._paused = True
+                    self._run_map_screen()
+                    self._paused = False
+                    self.clock.tick()  # discard accumulated time
                 if event.key == KEYBINDS['pause']:
                     self._paused = True
                     resume = self.pause_screen.run(self.screen, self.clock)
@@ -371,7 +377,7 @@ class Game:
                     self.try_use_action()
                 if event.key == KEYBINDS['inventory']:
                     self._paused = True
-                    self.inventory_screen.run(self.screen, self.clock, self.player, self.boxes)
+                    self.inventory_screen.run(self.screen, self.clock, self.player)
                     self._paused = False
                     self.clock.tick()  # discard accumulated time
 
@@ -616,6 +622,9 @@ class Game:
             else:
                 hint_text = f"{k_inv}: inventory"
 
+        k_map = pygame.key.name(KEYBINDS['map']).upper()
+        hint_text += f"  |  {k_map}: map"
+
         zone_text = f"Zone: {self.player.loadingzonex + 1}/{ZONE_COUNT_X}, {self.player.loadingzoney + 1}/{ZONE_COUNT_Y}"
         self.screen.blit(self.font.render(hint_text, True, (255, 255, 255)), (SCREEN_WIDTH - 350, 20))
         self.screen.blit(self.font.render(zone_text, True, (255, 255, 255)), (SCREEN_WIDTH - 350, 50))
@@ -658,7 +667,100 @@ class Game:
             pygame.draw.rect(self.screen, (50, 100, 50), hiding_rect.inflate(20, 10))
             self.screen.blit(hiding_surface, hiding_rect.topleft)
 
+        if self._map_open:
+            self._draw_minimap()
+
         present(self.screen)
+
+    def _run_map_screen(self):
+        """Full-screen map view (M to open/close). Shows the 3x3 block of
+        zones around the player — fogged unless visited or revealed via a
+        map_fragment — with a rough (not exact) indication of what's in
+        each known zone, like uncollected boxes."""
+        while True:
+            dt = self.clock.tick(60) / 1000.0
+            MUSIC.update(dt)
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    self.running = False
+                    return
+                if event.type == pygame.KEYDOWN:
+                    if event.key in (KEYBINDS['map'], pygame.K_ESCAPE):
+                        return
+            self._draw_map_screen()
+            present(self.screen)
+
+    def _draw_map_screen(self):
+        self.screen.fill((10, 12, 22))
+
+        title = self.font.render("MAP", True, (255, 255, 255))
+        self.screen.blit(title, (SCREEN_WIDTH // 2 - title.get_width() // 2, 20))
+
+        grid_left, grid_top = 60, 70
+        grid_right, grid_bottom = SCREEN_WIDTH - 60, SCREEN_HEIGHT - 50
+        cols = rows = 3
+        cell_w = (grid_right - grid_left) / cols
+        cell_h = (grid_bottom - grid_top) / rows
+
+        # Center the 3x3 window on the player's zone, clamped so it never
+        # runs off the edge of the real ZONE_COUNT_X x ZONE_COUNT_Y map.
+        cx = max(1, min(self.player.loadingzonex, ZONE_COUNT_X - 2))
+        cy = max(1, min(self.player.loadingzoney, ZONE_COUNT_Y - 2))
+
+        for row in range(rows):
+            for col in range(cols):
+                zx, zy = cx - 1 + col, cy - 1 + row
+                cell = pygame.Rect(int(grid_left + col * cell_w), int(grid_top + row * cell_h),
+                                    int(cell_w) - 4, int(cell_h) - 4)
+                known = (zx, zy) in self.player.known_zones
+                is_here = (zx == self.player.loadingzonex and zy == self.player.loadingzoney)
+
+                if not known:
+                    pygame.draw.rect(self.screen, (30, 32, 42), cell)
+                    fog = self.font.render("?", True, (70, 74, 90))
+                    self.screen.blit(fog, (cell.centerx - fog.get_width() // 2,
+                                            cell.centery - fog.get_height() // 2))
+                else:
+                    rad = get_zone_radiation(zx, zy)
+                    if rad >= 4:
+                        color = (140, 45, 35)
+                    elif rad >= 1:
+                        color = (110, 105, 50)
+                    else:
+                        color = (40, 75, 60)
+                    pygame.draw.rect(self.screen, color, cell)
+
+                    label = self.small_font.render(f"{zx},{zy}", True, (210, 215, 230))
+                    label_pos = (cell.left + 6, cell.top + 4)
+                    chip = pygame.Rect(label_pos[0] - 3, label_pos[1] - 2,
+                                        label.get_width() + 6, label.get_height() + 4)
+                    pygame.draw.rect(self.screen, (10, 12, 18), chip)
+                    self.screen.blit(label, label_pos)
+
+                    # Vague box positions — proportional to where they sit
+                    # within the zone, not exact pixel placement.
+                    for box in self.boxes:
+                        if box.collected:
+                            continue
+                        if (box.loading_zone_x, box.loading_zone_y) != (zx, zy):
+                            continue
+                        bx = cell.left + (box.x / MAP_WIDTH) * cell.width
+                        by = cell.top + (box.y / MAP_HEIGHT) * cell.height
+                        pygame.draw.circle(self.screen, (255, 215, 90), (int(bx), int(by)), 4)
+
+                    if is_here:
+                        px = cell.left + (self.player.x / MAP_WIDTH) * cell.width
+                        py = cell.top + (self.player.y / MAP_HEIGHT) * cell.height
+                        pygame.draw.circle(self.screen, (255, 255, 255), (int(px), int(py)), 5)
+                        pygame.draw.circle(self.screen, (0, 255, 100), (int(px), int(py)), 5, 2)
+
+                border_color = (0, 255, 100) if is_here else (80, 90, 110)
+                pygame.draw.rect(self.screen, border_color, cell, 2 if is_here else 1)
+
+        hint = self.small_font.render(
+            f"Yellow dots: boxes  |  {pygame.key.name(KEYBINDS['map']).upper()} / ESC: close",
+            True, (150, 150, 165))
+        self.screen.blit(hint, (SCREEN_WIDTH // 2 - hint.get_width() // 2, SCREEN_HEIGHT - 34))
 
     # ---- run ----
 
