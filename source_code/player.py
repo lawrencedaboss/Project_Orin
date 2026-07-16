@@ -2,7 +2,7 @@ import pygame
 import math
 from config import KEYBINDS, PLAYER_BASE_SPEED, HUNGER_RATE, HUNGER_SPEED_MULTIPLIER, RADIATION_MAX, PLAYER_START_X, PLAYER_START_Y, PLAYER_HUNGER_START
 from map_data import get_item_def
-from sprites import draw_player, init_sprites
+from sprites import draw_player
 
 
 class Player:

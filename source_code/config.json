@@ -5,7 +5,7 @@
     "zone_count_x": 20,
     "zone_count_y": 16,
     "fps": 100,
-    "animal_count": 40
+    "animal_count": 60
   },
   "keybinds": {
     "pause": "p",
@@ -23,14 +23,14 @@
   },
   "balance": {
     "monster_speed": 100,
-    "monster_wander_speed": 400,
+    "monster_wander_speed": 220,
     "animal_speed": 160,
     "animal_wander_interval_min": 5,
     "animal_wander_interval_max": 10,
     "player_base_speed": 500,
-    "hunger_rate": 1.1,
-    "hunger_speed_multiplier": 7.5,
-    "radiation_rate": 25,
+    "hunger_rate": 0.6,
+    "hunger_speed_multiplier": 4.5,
+    "radiation_rate": 3.5,
     "radiation_max": 100,
     "food_hunger_restore": 20
   },

@@ -3,6 +3,7 @@ import threading
 import time as _time
 import array
 import math
+import random
 from player import Player
 from monster import Monster
 from animals import Animal
@@ -10,7 +11,7 @@ from objects import Box
 from title_screen import TitleScreen
 from config import (SCREEN_WIDTH, SCREEN_HEIGHT, MAP_WIDTH, MAP_HEIGHT,
                     MAP_LEFT, MAP_TOP, ZONE_COUNT_X, ZONE_COUNT_Y, FPS,
-                    ANIMAL_COUNT, RADIATION_RATE, FOOD_HUNGER_RESTORE, KEYBINDS)
+                    ANIMAL_COUNT, RADIATION_RATE, KEYBINDS)
 from sounds import SFX, MUSIC, init_audio, SND_COLLECT, SND_HIDE, SND_UNHIDE, SND_DEATH, MUS_MENU, MUS_AMBIENT, MUS_TENSE
 from map_data import (get_zone_type, get_items_in_zone,
                       get_zone_grid, get_zone_radiation,
@@ -18,7 +19,6 @@ from map_data import (get_zone_type, get_items_in_zone,
                       ZONE_TILE_WIDTH, ZONE_TILE_HEIGHT)
 from sprites import ZONE_RENDERER, init_sprites
 from bullets import BulletsManager
-from bullets import Bullet
 from food import Food
 from inventory_screen import InventoryScreen
 from pause_screen import PauseScreen
@@ -67,13 +67,19 @@ class Game:
         self.screen = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
         pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.RESIZABLE)
         pygame.display.set_caption("Project Orin")
+        self._fullscreen = False
         init_sprites()   # load all spritesheets after display is created
 
         self.clock = pygame.time.Clock()
 
         self.player = Player(MAP_WIDTH, MAP_HEIGHT, ZONE_COUNT_X, ZONE_COUNT_Y)
         self.monster = Monster(MAP_WIDTH, MAP_HEIGHT, ZONE_COUNT_X, ZONE_COUNT_Y)
-        self.animals = [Animal(self.player.loadingzonex, self.player.loadingzoney,
+        # Animals only live in a patch of the map (a "habitat" pocket)
+        # instead of being spread thinly across all 320 zones — same total
+        # count packed into far fewer zones reads as noticeably denser.
+        HABITAT_X = (3, 9)
+        HABITAT_Y = (3, 9)
+        self.animals = [Animal(random.randint(*HABITAT_X), random.randint(*HABITAT_Y),
                                 MAP_WIDTH, MAP_HEIGHT, ZONE_COUNT_X, ZONE_COUNT_Y)
                         for _ in range(ANIMAL_COUNT)]
         self.game_surface = pygame.Surface((MAP_WIDTH, MAP_HEIGHT))
@@ -110,7 +116,6 @@ class Game:
         self.bullets = BulletsManager()
         self.last_mouse_pressed = False
         self.last_shoot_pressed = False
-        self._map_open = False
 
         self.running = False
 
@@ -156,13 +161,17 @@ class Game:
     # ---- display ----
 
     def _toggle_fullscreen(self):
-        # Calling set_mode() again here (e.g. to pass a different flag)
-        # reliably crashes with "failed to create renderer" on the
-        # fullscreen->windowed leg. toggle_fullscreen() resizes the real
-        # window in place instead — self.screen (our fixed logical
-        # surface) is untouched, present() just scales it to whatever
-        # size the window ends up at.
+        # toggle_fullscreen() alone is fine for windowed->fullscreen, but
+        # its own "restore windowed size" bookkeeping drifts smaller on
+        # repeated round-trips (900x700 -> 900x583 -> 900x453 -> stuck) —
+        # so force the windowed size back explicitly every time instead of
+        # trusting it. Safe now that self.screen isn't pygame.SCALED
+        # anymore (that combo is what caused set_mode() here to crash with
+        # "failed to create renderer").
+        self._fullscreen = not self._fullscreen
         pygame.display.toggle_fullscreen()
+        if not self._fullscreen:
+            pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.RESIZABLE)
 
     # ---- firing ----
 
@@ -358,14 +367,10 @@ class Game:
                 if event.key == pygame.K_F11 or event.key == KEYBINDS['fullscreen']:
                     self._toggle_fullscreen()
                 if event.key == KEYBINDS['map']:
-                    if not self._map_open and not self._paused:
-                        self._paused = True
-                        self._run_map_screen()
-                        self._map_open = True
-                        self._paused = False
-                        self.clock.tick()  # discard accumulated time
-                    elif self._map_open:
-                        self._map_open = False
+                    self._paused = True
+                    self._run_map_screen()
+                    self._paused = False
+                    self.clock.tick()  # discard accumulated time
                 if event.key == KEYBINDS['pause']:
                     self._paused = True
                     resume = self.pause_screen.run(self.screen, self.clock)
@@ -418,8 +423,8 @@ class Game:
             zone_rad_level = get_zone_radiation(
                 self.player.loadingzonex, self.player.loadingzoney)
             # Levels 0-6; level 0 = clean, 1 = very low, …6 = extreme
-            # Base ambient rate per second: level * 0.5  (so level 3 = 1.5 rad/s)
-            ambient_rate = zone_rad_level * 0.5
+            # Base ambient rate per second: level * 0.42 (so level 3 = ~1.26 rad/s)
+            ambient_rate = zone_rad_level * 0.42
 
             # 2. Monster proximity radiation
             monster_rate = 0.0
@@ -478,7 +483,8 @@ class Game:
                 if self._in_player_zone(animal) and bullet.rect.colliderect(animal.rect):
                     self.bullets.bullets.remove(bullet)
                     self.food.append(Food(animal.x, animal.y, 8,
-                                            animal.loading_zone_x, animal.loading_zone_y))
+                                            animal.loading_zone_x, animal.loading_zone_y,
+                                            item_id=f"{animal.animal_type}_meat"))
                     self.animals.remove(animal)
                     break
 
@@ -672,16 +678,13 @@ class Game:
             pygame.draw.rect(self.screen, (50, 100, 50), hiding_rect.inflate(20, 10))
             self.screen.blit(hiding_surface, hiding_rect.topleft)
 
-        if self._map_open:
-            self._draw_map_screen()
-
         present(self.screen)
 
     def _run_map_screen(self):
-        """Full-screen map view (M to open/close). Shows the 3x3 block of
+        """Full-screen map view (M to open/close). Shows the 4x4 block of
         zones around the player — fogged unless visited or revealed via a
-        map_fragment — with a rough (not exact) indication of what's in
-        each known zone, like uncollected boxes."""
+        map_fragment. Deliberately vague: no exact coordinates, just a
+        rough sense of hazard, obstacle clumps, and box locations."""
         while True:
             dt = self.clock.tick(60) / 1000.0
             MUSIC.update(dt)
@@ -701,77 +704,76 @@ class Game:
         title = self.font.render("MAP", True, (255, 255, 255))
         self.screen.blit(title, (SCREEN_WIDTH // 2 - title.get_width() // 2, 20))
 
-        grid_left, grid_top = 60, 70
-        grid_right, grid_bottom = SCREEN_WIDTH - 60, SCREEN_HEIGHT - 50
-        cols = rows = 3
-        cell_w = (grid_right - grid_left) / cols
-        cell_h = (grid_bottom - grid_top) / rows
+        # True per-tile rendering: each tile is a fixed 4x4 pixel block, so
+        # what's on the map is an actual (if tiny) picture of the zone —
+        # walls, boxes, and the player all land at their real tile position
+        # instead of a coarse density-sampled approximation.
+        TILE_PX = 4
+        cols = rows = 4
+        zone_w_px = ZONE_TILE_WIDTH * TILE_PX
+        zone_h_px = ZONE_TILE_HEIGHT * TILE_PX
+        gap = 6
+        grid_w = cols * zone_w_px + (cols - 1) * gap
+        grid_h = rows * zone_h_px + (rows - 1) * gap
+        grid_left = (SCREEN_WIDTH - grid_w) // 2
+        available_top, available_bottom = 60, SCREEN_HEIGHT - 40
+        grid_top = available_top + (available_bottom - available_top - grid_h) // 2
 
-        # Center the 3x3 window on the player's zone, clamped so it never
+        # Center the 4x4 window on the player's zone, clamped so it never
         # runs off the edge of the real ZONE_COUNT_X x ZONE_COUNT_Y map.
-        cx = max(1, min(self.player.loadingzonex, ZONE_COUNT_X - 2))
-        cy = max(1, min(self.player.loadingzoney, ZONE_COUNT_Y - 2))
+        cx = max(1, min(self.player.loadingzonex, ZONE_COUNT_X - 3))
+        cy = max(1, min(self.player.loadingzoney, ZONE_COUNT_Y - 3))
 
         for row in range(rows):
             for col in range(cols):
                 zx, zy = cx - 1 + col, cy - 1 + row
-                cell = pygame.Rect(int(grid_left + col * cell_w), int(grid_top + row * cell_h),
-                                    int(cell_w) - 4, int(cell_h) - 4)
+                zone_left = grid_left + col * (zone_w_px + gap)
+                zone_top  = grid_top + row * (zone_h_px + gap)
+                zone_rect = pygame.Rect(zone_left, zone_top, zone_w_px, zone_h_px)
                 known = (zx, zy) in self.player.known_zones
                 is_here = (zx == self.player.loadingzonex and zy == self.player.loadingzoney)
 
                 if not known:
-                    pygame.draw.rect(self.screen, (30, 32, 42), cell)
-                    fog = self.font.render("?", True, (70, 74, 90))
-                    self.screen.blit(fog, (cell.centerx - fog.get_width() // 2,
-                                            cell.centery - fog.get_height() // 2))
+                    pygame.draw.rect(self.screen, (30, 32, 42), zone_rect)
                 else:
-                    rad = get_zone_radiation(zx, zy)
-                    if rad >= 4:
-                        color = (140, 45, 35)
-                    elif rad >= 1:
-                        color = (110, 105, 50)
-                    else:
-                        color = (40, 75, 60)
-                    pygame.draw.rect(self.screen, color, cell)
+                    hazardous = get_zone_radiation(zx, zy) >= 1
+                    bg_color = (95, 55, 45) if hazardous else (40, 75, 60)
+                    pygame.draw.rect(self.screen, bg_color, zone_rect)
 
-                    label = self.small_font.render(f"{zx},{zy}", True, (210, 215, 230))
-                    label_pos = (cell.left + 6, cell.top + 4)
-                    chip = pygame.Rect(label_pos[0] - 3, label_pos[1] - 2,
-                                        label.get_width() + 6, label.get_height() + 4)
-                    pygame.draw.rect(self.screen, (10, 12, 18), chip)
-                    self.screen.blit(label, label_pos)
+                    grid = get_zone_grid(zx, zy)
+                    if grid:
+                        for ty, tile_row in enumerate(grid):
+                            for tx, tile in enumerate(tile_row):
+                                if tile == TILE_WALL:
+                                    block = pygame.Rect(zone_left + tx * TILE_PX, zone_top + ty * TILE_PX,
+                                                         TILE_PX, TILE_PX)
+                                    pygame.draw.rect(self.screen, (150, 155, 170), block)
 
-                    # Vague box positions — proportional to where they sit
-                    # within the zone, not exact pixel placement.
                     for box in self.boxes:
-                        if box.collected:
-                            continue
                         if (box.loading_zone_x, box.loading_zone_y) != (zx, zy):
                             continue
-                        bx = cell.left + (box.x / MAP_WIDTH) * cell.width
-                        by = cell.top + (box.y / MAP_HEIGHT) * cell.height
-                        pygame.draw.circle(self.screen, (255, 215, 90), (int(bx), int(by)), 4)
+                        tile_x = min(ZONE_TILE_WIDTH - 1, max(0, int(box.x // UNIT_W)))
+                        tile_y = min(ZONE_TILE_HEIGHT - 1, max(0, int(box.y // UNIT_H)))
+                        bx, by = zone_left + tile_x * TILE_PX, zone_top + tile_y * TILE_PX
+                        color = (90, 200, 110) if box.collected else (255, 215, 90)
+                        pygame.draw.rect(self.screen, color, (bx, by, TILE_PX, TILE_PX))
 
                     if is_here:
-                        px = cell.left + (self.player.x / MAP_WIDTH) * cell.width
-                        py = cell.top + (self.player.y / MAP_HEIGHT) * cell.height
-                        pygame.draw.circle(self.screen, (255, 255, 255), (int(px), int(py)), 5)
-                        pygame.draw.circle(self.screen, (0, 255, 100), (int(px), int(py)), 5, 2)
+                        tile_x = min(ZONE_TILE_WIDTH - 1, max(0, int(self.player.x // UNIT_W)))
+                        tile_y = min(ZONE_TILE_HEIGHT - 1, max(0, int(self.player.y // UNIT_H)))
+                        px, py = zone_left + tile_x * TILE_PX, zone_top + tile_y * TILE_PX
+                        pygame.draw.rect(self.screen, (255, 255, 255),
+                                          (px - 1, py - 1, TILE_PX + 2, TILE_PX + 2))
+                        pygame.draw.rect(self.screen, (0, 255, 100), (px, py, TILE_PX, TILE_PX))
 
                 border_color = (0, 255, 100) if is_here else (80, 90, 110)
-                pygame.draw.rect(self.screen, border_color, cell, 2 if is_here else 1)
+                pygame.draw.rect(self.screen, border_color, zone_rect, 2 if is_here else 1)
 
         hint = self.small_font.render(
-            f"Yellow dots: boxes  |  {pygame.key.name(KEYBINDS['map']).upper()} / ESC: close",
+            "Yellow: closed box  Green: opened box  Grey: obstacle  |  "
+            f"{pygame.key.name(KEYBINDS['map']).upper()} / ESC: close",
             True, (150, 150, 165))
         self.screen.blit(hint, (SCREEN_WIDTH // 2 - hint.get_width() // 2, SCREEN_HEIGHT - 34))
-        
-        for event in pygame.event.get():
-            if event.type == pygame.KEYDOWN and event.key in (KEYBINDS['map'], pygame.K_ESCAPE):
-                self._map_open = False
-
-
 
     # ---- run ----
 

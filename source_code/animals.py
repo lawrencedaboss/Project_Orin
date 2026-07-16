@@ -24,8 +24,8 @@ class Animal:
         self.zone_count_x  = zone_count_x
         self.zone_count_y  = zone_count_y
 
-        self.loading_zone_x = random.randint(0, self.zone_count_x - 1)
-        self.loading_zone_y = random.randint(0, self.zone_count_y - 1)
+        self.loading_zone_x = loading_zone_x
+        self.loading_zone_y = loading_zone_y
 
         self.x = random.randint(50, self.screen_width  - 50)
         self.y = random.randint(50, self.screen_height - 50)

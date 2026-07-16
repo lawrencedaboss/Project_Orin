@@ -63,5 +63,29 @@
     "category": "equipment",
     "equippable": true,
     "slot": "body"
+  },
+  "rabbit_meat": {
+    "name": "Rabbit Meat",
+    "description": "Lean meat from a rabbit. Restores 12 hunger.",
+    "effect": {
+      "hunger": 12
+    },
+    "category": "food"
+  },
+  "deer_meat": {
+    "name": "Deer Meat",
+    "description": "Meat from a deer. Restores 20 hunger.",
+    "effect": {
+      "hunger": 20
+    },
+    "category": "food"
+  },
+  "moose_meat": {
+    "name": "Moose Meat",
+    "description": "Hearty meat from a moose. Restores 30 hunger.",
+    "effect": {
+      "hunger": 30
+    },
+    "category": "food"
   }
 }

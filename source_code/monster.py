@@ -79,6 +79,15 @@ ENGAGE_TIMEOUT_MAX = 45.0
 CHASE_SPEED_MAX   = 1.5   # top speed multiplier during a chase
 CHASE_SPEED_RATE  = 0.15   # how fast the multiplier climbs per second
 SEARCH_DURATION   = 7.0    # seconds to sweep last-known area before giving up
+
+# "Visible" in this game just means same-zone-and-not-hiding, not real
+# line-of-sight — a player who stays in one (possibly large) zone can keep
+# a chase running uninterrupted far longer than intended. Capping how long
+# a single CHASE can run before it lapses into SEARCH (as if it lost the
+# trail) guarantees the periodic breaks the leave-timeout logic needs to
+# fire cleanly, instead of forcing it to interrupt an active chase.
+CHASE_MAX_DURATION_MIN = 20.0
+CHASE_MAX_DURATION_MAX = 30.0
 SEARCH_RADIUS     = 80     # pixel radius to wander around the search anchor
 
 PREDICT_T     = 0.15   # seconds ahead to aim during chase
@@ -276,6 +285,8 @@ class Monster:
 
         # Chase ramp
         self._chase_speed_mult = 1.0
+        self._chase_duration   = 0.0
+        self._chase_max_duration = random.uniform(CHASE_MAX_DURATION_MIN, CHASE_MAX_DURATION_MAX)
 
         # Search sweep
         self._search_timer    = 0.0
@@ -838,6 +849,8 @@ class Monster:
         self._last_known_zone_x = None
         self._last_known_zone_y = None
         self._chase_speed_mult = 1.0
+        self._chase_duration   = 0.0
+        self._chase_max_duration = random.uniform(CHASE_MAX_DURATION_MIN, CHASE_MAX_DURATION_MAX)
         self._search_timer = 0.0
         self._prev_target_x = None
         self._prev_target_y = None
@@ -878,7 +891,6 @@ class Monster:
                 self._spawn_near_player(player_zone_x, player_zone_y)
             return
 
-        zone_dist = self._zone_distance(player_zone_x, player_zone_y)
         path_dist = self._path_distance(player_zone_x, player_zone_y)
 
         if path_dist >= DESPAWN_ZONE_DISTANCE:
@@ -900,9 +912,19 @@ class Monster:
             # state back to PATROL every frame (see hiding branch below),
             # so gating on state let a player who hides periodically reset
             # this to 0 indefinitely and the monster would never leave.
+            # It still only ACTS on an expired timer when not in the middle
+            # of an active, visible chase — turning away mid-pursuit read as
+            # leaving "for no reason"; it now waits for the chase to break
+            # (player escapes sight/hides) before actually disengaging,
+            # which happens soon regardless since CHASE rarely holds long.
+            # Safety valve: if the player never breaks line of sight (e.g.
+            # stands still), the wait-for-a-break condition could stall
+            # forever — force it after a generous grace period regardless
+            # of state so it's a rare last resort, not the common case.
             self._engage_timer += dt
             if self._engage_timer >= self._engage_timeout:
-                self._leaving = True
+                if self._state != STATE_CHASE or self._engage_timer >= self._engage_timeout + 20.0:
+                    self._leaving = True
 
         if self._leaving:
             self._move_flee_world_edge(dt)
@@ -962,12 +984,18 @@ class Monster:
             if player_visible:
                 self._state            = STATE_CHASE
                 self._chase_speed_mult = 1.0
+                self._chase_duration   = 0.0
             elif path_dist >= ALERT_ZONE_DIST:
                 self._state = STATE_PATROL
 
         elif self._state == STATE_CHASE:
-            if not player_visible:
-                # Player left zone (not hiding — handled above)
+            self._chase_duration += dt
+            if not player_visible or self._chase_duration >= self._chase_max_duration:
+                # Player left zone, or the chase ran long enough that
+                # "losing the trail" reads as a natural beat rather than
+                # an arbitrary abandonment (not-visible handled the same
+                # way already — this just gives a long same-zone chase an
+                # equivalent way to end).
                 self._state        = STATE_SEARCH
                 self._search_timer = SEARCH_DURATION
                 self._search_anchor_x = self._last_known_x or self.x
@@ -977,6 +1005,7 @@ class Monster:
             if player_visible:
                 self._state            = STATE_CHASE
                 self._chase_speed_mult = 1.1  # already alerted — faster ramp start
+                self._chase_duration   = 0.0
             else:
                 self._search_timer -= dt
                 if self._search_timer <= 0:

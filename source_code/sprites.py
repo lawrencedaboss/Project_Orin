@@ -11,18 +11,32 @@ All draw functions fall back to coloured rects when files are missing.
 """
 
 import os
+import json
 import pygame
 
 SPRITE_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets", "Animations")
 
+# The mask-based connected-component analysis in _content_rects() is the
+# single biggest cost of a cold sprite load (~2.5s of a ~4.4s total on a
+# full 50-sheet load) — it does per-pixel work on sheets up to 8192x8192.
+# Its result is a pure function of the source PNG, which doesn't change
+# between runs, so cache it to disk keyed by file mtime and skip the mask
+# analysis entirely on cache hits.
+_CACHE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".sprite_rect_cache.json")
+_rect_cache = None
+
 
 
 # ---- display sizes (visuals only, rect/collision sizes never change) ----
-_SZ_P = (16, 20)   # player
-_SZ_M = (24, 36)   # monster
-_SZ_A = (38, 38)   # deer / moose
-_SZ_R = (26, 26)   # rabbit
-_SZ_I = (26, 26)   # items / food
+# Kept close to each entity's actual collision rect (player 20x20, monster
+# 32x32, animal 16x16, box ~37x34) instead of the much larger sizes these
+# used before, which made sprites look like they should hit/dodge things
+# well outside their real hitbox.
+_SZ_P = (20, 24)   # player   (hitbox 20x20)
+_SZ_M = (30, 34)   # monster  (hitbox 32x32)
+_SZ_A = (22, 22)   # deer / moose (hitbox 16x16)
+_SZ_R = (18, 18)   # rabbit   (hitbox 16x16)
+_SZ_I = (28, 26)   # items / food / boxes (box hitbox ~37x34, food 8x8)
 
 ANIM_FPS = 8.0
 _READY   = False
@@ -166,13 +180,50 @@ def _reading_order(rects):
     return ordered
 
 
+def _load_rect_cache():
+    global _rect_cache
+    if _rect_cache is not None:
+        return _rect_cache
+    try:
+        with open(_CACHE_FILE, 'r') as f:
+            _rect_cache = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        _rect_cache = {}
+    return _rect_cache
+
+
+def _save_rect_cache():
+    if _rect_cache is None:
+        return
+    try:
+        with open(_CACHE_FILE, 'w') as f:
+            json.dump(_rect_cache, f)
+    except OSError:
+        pass
+
+
+def _cached_content_rects(fname, img):
+    cache = _load_rect_cache()
+    path = os.path.join(SPRITE_DIR, fname)
+    try:
+        mtime = os.path.getmtime(path)
+    except OSError:
+        mtime = None
+    entry = cache.get(fname)
+    if entry is not None and entry.get('mtime') == mtime:
+        return [pygame.Rect(r) for r in entry['rects']]
+    rects = _content_rects(img)
+    cache[fname] = {'mtime': mtime, 'rects': [list(r) for r in rects]}
+    return rects
+
+
 def _single(fname, bg, target):
     """Load one image, auto-detect its content blob, crop + scale to target."""
     colorkey = (0, 0, 0) if bg == 'black' else None
     img = _load_img(fname, colorkey)
     if img is None:
         return []
-    rects = _content_rects(img)
+    rects = _cached_content_rects(fname, img)
     if not rects:
         return []
     bbox = rects[0]
@@ -180,6 +231,7 @@ def _single(fname, bg, target):
         bbox = bbox.union(r)
     surf = _crop_scale(img, (bbox.left, bbox.top, bbox.right, bbox.bottom), target)
     return [surf] if surf else []
+
 
 
 def _grid(fname, bg, target):
@@ -193,7 +245,7 @@ def _grid(fname, bg, target):
     if img is None:
         return []
     frames = []
-    for r in _reading_order(_content_rects(img)):
+    for r in _reading_order(_cached_content_rects(fname, img)):
         surf = _crop_scale(img, (r.left, r.top, r.right, r.bottom), target)
         if surf:
             frames.append(surf)
@@ -285,6 +337,7 @@ def _load_all():
     ok  = sum(1 for v in F.values() if v)
     bad = [k for k, v in F.items() if not v]
     print(f"[sprites] {ok}/{len(F)} keys loaded.  Missing: {bad}")
+    _save_rect_cache()
 
 
 def init_sprites():
@@ -451,7 +504,7 @@ class ZoneRenderer:
             pygame.draw.rect(surface, border, (rx,ry,tw,th), 2)
 
     def render(self, surface, zx, zy, zone_type):
-        from map_data import get_zone_grid, MAP_WIDTH, MAP_HEIGHT
+        from map_data import get_zone_grid
         from config import MAP_WIDTH as MW, MAP_HEIGHT as MH
         grid = get_zone_grid(zx, zy)
         if not grid: return
